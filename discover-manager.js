@@ -27,39 +27,61 @@ export async function init(dependencies) {
     }
 }
 
+async function cacheEnrichedData(track) {
+  // Cache the track object
+  await db.tracks.put({
+    id: track.id.toString(),
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    audioUrl: track.audioUrl,
+    albumArt: track.albumArt,
+    bio: track.bio,
+    tags: track.tags,
+    lyricsUrl: track.lyricsUrl,
+    mbid: track.mbid,
+    downloaded: false // Initially, only metadata is cached, not the audio file
+  });
+
+  // Cache the artist object separately for the 'Artists' view
+  // Use 'put' to add or update the artist info
+  if (track.artist) {
+    await db.artists.put({
+      name: track.artist,
+      genre: track.tags?.[0] || '',
+      bio: track.bio,
+      imageUrl: track.albumArt, // Use track album art as a proxy for artist image
+      similarArtists: track.similarArtists
+    });
+  }
+}
+
 async function fetchDiscoverTracks(query = 'popular') {
     try {
         const response = await fetch(`/discover?q=${encodeURIComponent(query)}`);
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
         }
-        const tracks = await response.json();
+        const enrichedTracks = await response.json();
 
         // Cache each enriched track for offline use
-        if (tracks.length > 0) {
-            const tracksToCache = tracks.map(track => ({
-                id: track.id.toString(),
-                name: track.name,
-                artist: track.artist_name,
-                album: track.album_name,
-                coverURL: track.image,
-                audioUrl: track.audio, // URL for streaming
-                bio: track.bio,
-                tags: track.tags,
-                lyricsUrl: track.lyricsUrl,
-                similarArtists: track.similarArtists,
-            }));
-            await db.tracks.bulkPut(tracksToCache);
+        if (enrichedTracks.length > 0) {
+            for (const track of enrichedTracks) {
+                await cacheEnrichedData(track);
+            }
         }
-        return tracks;
+        return enrichedTracks;
     } catch (error) {
         console.error('Failed to fetch discover tracks:', error);
-        config.showMessage('Could not connect to the discovery service. Make sure the server is running.');
+        config.showMessage('Offline. Searching your local cache...');
 
         // Fallback: If offline, search the local cache
-        config.showMessage('Offline. Searching local cache...');
-        const cached = await db.tracks.where('name').equalsIgnoreCase(query).or('artist').equalsIgnoreCase(query).toArray();
-        return cached.map(t => ({ ...t, image: t.coverURL, artist_name: t.artist, name: t.name })); // Normalize for rendering
+        const qLower = query.toLowerCase();
+        const cached = await db.tracks.filter(track => 
+            track.title.toLowerCase().includes(qLower) || 
+            track.artist.toLowerCase().includes(qLower)
+        ).toArray();
+        return cached;
     }
 }
 
@@ -79,7 +101,7 @@ async function renderDiscoverGrid(query) {
 
     config.discoverContent.innerHTML = tracks.map(track => {
         // Jamendo API provides different image sizes, let's pick a medium one
-        const coverURL = track.image ? track.image.replace('1.200x1200', '1.300x300') : 'https://via.placeholder.com/300';
+        const coverURL = track.albumArt ? track.albumArt.replace('1.200x1200', '1.300x300') : 'https://via.placeholder.com/300';
         const tagsHTML = track.tags && track.tags.length > 0
             ? `<div class="card-tags">${track.tags.slice(0, 2).map(tag => `<span>${tag}</span>`).join('')}</div>`
             : '';
@@ -87,13 +109,13 @@ async function renderDiscoverGrid(query) {
         return `
             <div class="recent-media-card" data-track-id="${track.id}">
                 <div class="album-art" data-action="play">
-                    <img src="${coverURL}" alt="${track.name}">
+                    <img src="${coverURL}" alt="${track.title}">
                 </div>
                 <div class="card-body">
                     ${tagsHTML}
                 </div>
                 <div class="card-footer">
-                    <h5>${track.name}</h5>
+                    <h5>${track.title}</h5>
                     <button class="control-btn small track-action-btn" title="Download" data-action="download"><i class="fas fa-download"></i></button>
                 </div>
             </div>
@@ -106,18 +128,18 @@ async function renderDiscoverGrid(query) {
             if (!action) return;
 
             const trackId = card.dataset.trackId;
-            const trackData = tracks.find(t => t.id === trackId);
+            const trackData = tracks.find(t => t.id.toString() === trackId);
 
             if (action === 'play' && trackData) {
                 // Create a track object compatible with our player
                 const playerTrack = {
                     id: trackData.id,
-                    name: trackData.name,
-                    artist: trackData.artist_name,
-                    album: trackData.album_name,
+                    name: trackData.title,
+                    artist: trackData.artist,
+                    album: track.album,
                     duration: trackData.duration,
-                    coverURL: trackData.image,
-                    objectURL: trackData.audio, // Direct audio URL
+                    coverURL: trackData.albumArt,
+                    objectURL: trackData.audioUrl, // Direct audio URL for streaming
                     isURL: true, // Mark as a stream
                 };
                 config.startPlayback([playerTrack], 0);

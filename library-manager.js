@@ -43,17 +43,17 @@ export async function handleFiles(fileList, options = {}) {
             // Use the metadata provided from the Discover API
             const data = options.discoverData;
             metadata = {
-                id: data.id.toString(), // Ensure ID is a string
-                name: data.name || 'Unknown Title',
-                artist: data.artist_name || 'Unknown Artist',
-                album: data.album_name || 'Unknown Album',
-                coverURL: data.image || null,
+                id: data.id.toString(),
+                title: data.title || 'Unknown Title',
+                artist: data.artist || 'Unknown Artist',
+                album: data.album || 'Unknown Album',
+                albumArtUrl: data.albumArt || null, // From discover, this is a permanent URL
                 duration: data.duration || 0,
-                // Map enriched fields from the discover object
                 bio: data.bio || null,
                 tags: data.tags || [],
                 lyricsUrl: data.lyricsUrl || null,
                 similarArtists: data.similarArtists || [],
+                mbid: data.mbid || null,
             };
         } else {
             // Fallback to extracting metadata from the file itself
@@ -64,11 +64,20 @@ export async function handleFiles(fileList, options = {}) {
             // Create the full track object for Dexie
             const trackForDB = {
                 ...metadata,
+                name: metadata.title, // Ensure 'name' field is populated for other parts of the app that might still use it
+                coverBlob: metadata.coverBlob, // Save the cover blob
                 downloaded: true, // Mark this track as fully downloaded
                 audioBlob: file, // Store the actual file blob
             };
-            await config.saveTrackToDB(trackForDB);
-            newTracks.push(metadata); // Push metadata to the in-memory library
+            // Use 'put' which will update the existing metadata-only entry with the audio blob
+            await config.saveTrackToDB(trackForDB); 
+
+            // **THE FIX**: Push the complete object with a valid coverURL to the in-memory library
+            const trackForMemory = { ...trackForDB };
+            if (trackForMemory.coverBlob) {
+                trackForMemory.coverURL = URL.createObjectURL(trackForMemory.coverBlob);
+            }
+            newTracks.push(trackForMemory);
         }
     }
 

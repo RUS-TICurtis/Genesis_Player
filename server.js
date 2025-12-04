@@ -14,11 +14,11 @@ app.use(express.static('.'));
 app.use(cors());
 
 // --- Import API Modules ---
-const { fetchJamendo } = require('./apis/jamendo');
-const { fetchAudioDB } = require('./apis/theaudiodb');
-const { fetchLastFM } = require('./apis/lastfm');
-const { fetchGenius } = require('./apis/genius');
-const { fetchMusicBrainz } = require('./apis/musicbrainz');
+const { fetchJamendo } = require('./jamendo.js');
+const { fetchAudioDB } = require('./theaudiodb.js');
+const { fetchLastFM } = require('./lastfm.js');
+const { fetchGenius } = require('./genius.js');
+const { fetchMusicBrainz } = require('./musicbrainz.js');
 
 // --- Unified Discover Route ---
 

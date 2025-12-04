@@ -39,25 +39,27 @@ export function extractMetadata(file) {
     return new Promise((resolve) => {
         jsmediatags.read(file, {
             onSuccess: async (tag) => {
-                const tags = tag.tags;
+                const { tags } = tag;
+                let coverBlob = null;
                 let coverURL = null;
                 try {
                     if (tags.picture) {
                         const { data, format } = tags.picture;
-                        const blob = new Blob([new Uint8Array(data)], { type: format });
-                        coverURL = URL.createObjectURL(blob);
+                        coverBlob = new Blob([new Uint8Array(data)], { type: format });
                     } else {
+                        // Fallback to manual search if jsmediatags fails
                         const arrayBuffer = await file.arrayBuffer();
-                        const coverBlob = extractCoverFromArrayBuffer(arrayBuffer);
-                        if (coverBlob) coverURL = URL.createObjectURL(coverBlob);
+                        coverBlob = extractCoverFromArrayBuffer(arrayBuffer);
                     }
+                    if (coverBlob) coverURL = URL.createObjectURL(coverBlob);
                 } catch (e) {
                     console.warn(`Cover extraction failed for ${file.name}:`, e);
                 }
 
                 resolve({
                     id,
-                    name: tags.title || file.name.replace(/\.[^/.]+$/, ""),
+                    coverBlob, // Return the blob itself
+                    title: tags.title || file.name.replace(/\.[^/.]+$/, ""),
                     duration: 0, isURL: false, artist: tags.artist || null, album: tags.album || null,
                     objectURL: url, coverURL: coverURL,
                     lyrics: tags.lyrics || (tags.comment && tags.comment.text) || null
@@ -65,7 +67,7 @@ export function extractMetadata(file) {
             },
             onError: (error) => {
                 console.warn(`jsmediatags error for ${file.name}:`, error.message);
-                resolve({ id, name: file.name.replace(/\.[^/.]+$/, ""), duration: 0, isURL: false, objectURL: url });
+                resolve({ id, title: file.name.replace(/\.[^/.]+$/, ""), duration: 0, isURL: false, objectURL: url });
             }
         });
     });

@@ -234,6 +234,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (track.audioBlob) {
                             trackData.objectURL = URL.createObjectURL(track.audioBlob);
                         }
+                        // **THE FIX**: Create a fresh objectURL for the cover art from its blob
+                        if (track.coverBlob) {
+                            trackData.coverURL = URL.createObjectURL(track.coverBlob);
+                        } else if (track.albumArtUrl) {
+                            // For discovered tracks that haven't been downloaded, use the permanent URL
+                            trackData.coverURL = track.albumArtUrl;
+                        }
                     }
 
                     // Parse lyrics if they exist
@@ -712,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const titleEl = document.getElementById('song-title');
         const trackName = track.name;
         titleEl.textContent = trackName;
-        artistName.textContent = track.artist || (track.isURL ? 'Web Stream' : 'Unknown Artist'); // Keep artist on a separate line for clarity
+        artistName.textContent = track.artist || (track.isURL ? 'Web Stream' : 'Unknown Artist');
         
         // Update album art
         const artImg = document.getElementById('album-art-img');
