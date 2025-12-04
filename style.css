@@ -1,11 +1,27 @@
 :root {
     --primary-color: #6c5ce7;
     --secondary-color: #a29bfe;
+    --surface-color: #fafafa; /* New: A softer white for component backgrounds */
     --dark-color: #2d3436;
-    --light-color: #f5f6fa;
+    --light-color: #f0f2f5; /* A slightly darker background for better contrast */
     --text-color: #636e72;
+    --text-light: #dfe6e9;
     --highlight-color: #fd79a8;
     --background-gradient: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+}
+
+body.dark-theme {
+    --primary-color: #7a69ff; /* Slightly brighter purple for dark bg */
+    --secondary-color: #a29bfe;
+    --surface-color: #2c3136; /* Dark grey for cards, sidebars, modals */
+    --dark-color: #e1e1e1; /* Light text color */
+    --light-color: #1e2124; /* Main dark background */
+    --text-color: #909599; /* Dimmer secondary text */
+    --text-light: #4a4f54; /* Used for borders or subtle backgrounds */
+    --highlight-color: #fd79a8;
+
+    /* Invert some shadows to glows or lighter shadows */
+    --shadow-color-light: rgba(255, 255, 255, 0.05);
 }
 
 * {
@@ -31,7 +47,7 @@ body {
 /* Sidebar */
 .sidebar {
   width: 250px;
-  background-color: white;
+  background-color: var(--surface-color);
   box-shadow: 2px 0 10px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
@@ -41,6 +57,14 @@ body {
   height: 100vh;
   overflow-y: auto;
 }
+.settings-link-container {
+    margin-top: auto; /* Pushes to the bottom */
+    padding: 10px 20px 20px;
+    border-top: 1px solid var(--text-light);
+}
+
+
+
 
 .logo {
     display: flex;
@@ -92,15 +116,17 @@ body {
 .open-btn {
     width: 100%;
     display: flex;
-    align-items: center;
-    padding: 12px 15px;
-    background-color: white;
+    align-items: center;     padding: 12px 15px;    background-color: var(--surface-color);
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     cursor: pointer;
     color: var(--dark-color);
     font-weight: 600;
     transition: all 0.3s ease;
+}
+
+body.dark-theme .open-btn {
+    border-color: var(--text-light);
 }
 
 .open-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
@@ -111,12 +137,12 @@ body {
     top: 100%;
     left: 0;
     width: 100%;
-    background-color: white;
+    background-color: var(--surface-color);
     border-radius: 8px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    margin-top: 5px;
+    margin-top: 5px; 
     z-index: 20;
-    border: 1px solid #f0f0f0;
+    border: 1px solid var(--text-light);
     overflow: hidden;
 }
 
@@ -129,7 +155,7 @@ body {
     font-size: 14px;
     color: var(--text-color);
 }
-.dropdown-item:hover { background-color: #f9f9f9; color: var(--primary-color); }
+.dropdown-item:hover { background-color: var(--light-color); }
 .dropdown-item i { width: 20px; margin-right: 10px; text-align: center; }
 
 .hidden { display: none !important; }
@@ -137,19 +163,24 @@ body {
 /* Main Content Styles */
 .main-content {
   flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  background-color: #f9f9f9;
+  background-color: var(--light-color);
   min-height: 100vh;
   overflow-y: auto;
   padding-bottom: 90px; /* Add padding to avoid overlap with the new playback bar */
+  position: relative;
+  transition: margin-right 0.4s ease-in-out;
 }
+
+.main-content.panel-active {
+    margin-right: 320px; /* Width of the panel */
+}
+
+/* .main-content > .main-section is not needed as they are block elements by default */
 
 .search-bar {
     display: flex;
     align-items: center;
-    padding: 20px 30px;
-    background-color: white;
+    padding: 20px 30px;    background-color: var(--surface-color);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     position: relative;
 }
@@ -170,8 +201,8 @@ body {
     top: calc(100% + 8px);
     left: 30px;
     right: 30px;
-    background: white;
-    border: 1px solid #e9e9e9;
+    background: var(--surface-color);
+    border: 1px solid var(--text-light);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.08);
     z-index: 300;
@@ -190,7 +221,8 @@ body {
     cursor: pointer;
     color: var(--dark-color);
 }
-.search-dropdown .result-item:hover {
+.search-dropdown .result-item:hover,
+.search-dropdown .result-item.highlighted {
     background: rgba(108, 92, 231, 0.06);
     color: var(--primary-color);
 }
@@ -225,10 +257,83 @@ body {
 .view-options { display: flex; gap: 15px; }
 
 /* New Home Layout Styles */
+.home-header {
+    padding: 30px 30px 20px;
+}
+.home-header h2 {
+    font-size: 28px;
+    color: var(--dark-color);
+}
+.home-content-grid {
+    padding: 0 30px 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 20px;
+}
+.recent-media-card {
+    background: var(--surface-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    padding: 12px;
+    position: relative; /* Keep for potential absolute elements like context menus */
+    display: flex;
+    flex-direction: column;
+}
+.recent-media-card .album-art {
+    width: 100%; /* Let width be 100% of the card's content area */
+    aspect-ratio: 1 / 1;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden; /* Hide any overflow from the image */
+    background-color: #f0f0f0; /* Add a background for non-square images */
+}
+
+.recent-media-card .album-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Changed to cover for a better look with various image sizes */
+}
+
+.recent-media-card .album-art img {
+    /* Prevent the image from capturing click events meant for the card */
+    pointer-events: none;
+}
+
+.placeholder-icon {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-gradient);
+    color: rgba(255,255,255,0.7);
+    /* Prevent the icon from capturing click events meant for the parent card/row */
+    pointer-events: none;
+}
+.recent-media-card .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto; /* This pushes the footer to the bottom */
+    min-width: 0; /* Crucial for flexbox truncation */
+}
+.recent-media-card h5 {
+    font-size: 14px;
+    /* Allow wrapping up to two lines */
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0; /* And this is also key for truncation */
+    margin: 0;
+}
 .home-layout {
     display: flex;
     flex-direction: column;
-    height: 100%; /* Make it fill the parent */
 }
 
 .home-layout .queue-section {
@@ -239,7 +344,7 @@ body {
 
 .home-layout .player-container {
     flex-shrink: 0; /* Prevents the player from shrinking */
-    border-top: 1px solid #e9e9e9;
+    border-top: 1px solid var(--light-color);
     background-color: #fff;
 }
 
@@ -256,33 +361,28 @@ body {
 
 /* Hide the Menu Button by default */
 .track-action-btn {
-    opacity: 0;
-    visibility: hidden;
+    /* Make the button visible by default in all contexts */
+    opacity: 1;
+    visibility: visible;
     transition: opacity 0.2s, visibility 0.2s;
     background: none;
     border: none;
+    border-radius: 50%;
     cursor: pointer;
     font-size: 1.1em;
     color: var(--text-color);
 }
 
-/* Show Menu Button on Row Hover */
-.track-list-row:hover .track-action-btn {
-    opacity: 1;
-    visibility: visible;
-}
-
 /* --- Dropdown Menu Styling --- */
-
 .context-menu {
     position: absolute;
     top: 100%; /* Position below the track row */
-    right: 5px;
-    z-index: 100;
-    background-color: #fff;
+    right: 5px;    z-index: 100;
+    background-color: var(--surface-color);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     min-width: 200px;
+    padding: 5px 0;
     overflow: hidden;
     visibility: hidden; /* Controlled by JS */
     opacity: 0; /* Controlled by JS */
@@ -295,30 +395,59 @@ body {
 }
 
 .context-menu-item {
-    padding: 10px 15px;
+    padding: 12px 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 0.9em;
+    font-size: 14px;
     color: var(--dark-color);
-}
-
-.queue-item .track-action-btn {
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s, visibility 0.2s;
 }
 
 .context-menu-item:hover {
     background-color: var(--light-color);
     color: var(--primary-color);
 }
+.context-menu-item:hover i { color: var(--primary-color); }
 
 .context-menu-item i {
     width: 20px; /* Consistent icon size */
 }
 
+.context-menu-item.has-submenu {
+    position: relative;
+}
+
+.context-menu-item .submenu-arrow {
+    margin-left: auto;
+    font-size: 0.8em;
+    color: var(--text-color);
+}
+
+.context-menu-submenu {
+    position: absolute;
+    left: 100%;
+    top: -8px; /* Align with parent item */
+    background-color: var(--surface-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    min-width: 180px;
+    padding: 5px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 110;
+}
+
+.context-menu-item.has-submenu:hover > .context-menu-submenu {
+    visibility: visible;
+    opacity: 1;
+}
+
+.context-menu-item.disabled {
+    color: #777;
+    cursor: default;
+}
 /* Old Player Styles - Can be removed or repurposed if no longer needed */
 .album-art-wrapper {
     position: relative;
@@ -339,7 +468,7 @@ body {
 .album-art img#album-art-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 15px;
     display: block;
     transition: opacity 220ms ease;
@@ -395,7 +524,7 @@ body {
 .progress-bar {
     height: 6px; 
     width: 100%; 
-    background-color: #e0e0e0;
+    background-color: var(--text-light); /* A bit darker for better contrast */
     border-radius: 3px; 
     margin-bottom: 10px;
     position: relative; 
@@ -409,8 +538,7 @@ body {
     height: 100%; 
     width: 0%;
     background: var(--background-gradient); 
-    border-radius: 3px;
-    transition: width 0.1s linear;
+    border-radius: 3px;    
 }
 
 .progress-head {
@@ -419,7 +547,7 @@ body {
     left: 0%; /* Updated by JS */
     width: 15px;
     height: 15px;
-    background-color: #6c5ce7; 
+    background-color: var(--primary-color); 
     border: 2px; /* Remove previous border */
     border-radius: 50%;    
     transform: translate(-50%, -50%);
@@ -460,8 +588,7 @@ body {
 .control-btn {
     width: 50px; 
     height: 50px; 
-    border-radius: 50%;
-    background-color: white; 
+    border-radius: 50%;    background-color: var(--surface-color); 
     border: none;
     display: flex; 
     justify-content: center; 
@@ -469,7 +596,7 @@ body {
     cursor: pointer; 
     transition: all 0.3s ease;
     color: var(--dark-color); 
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 10px var(--shadow-color-light, rgba(0, 0, 0, 0.1));
     flex-shrink: 0;
 }
 
@@ -478,7 +605,7 @@ body {
     height: 36px;
     background: transparent;
     box-shadow: none;
-    color: var(--light-color);
+    color: var(--dark-color);
 }
 .control-btn:hover { 
     transform: scale(1.05); 
@@ -522,7 +649,7 @@ body {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-color: #e0e0e0; 
+    background-color: var(--text-light); 
     border-radius: 2px; 
     outline: none;
 }
@@ -546,8 +673,8 @@ body {
     left: 0;
     width: 100%;
     height: 90px;
-    background-color: #ffffff;
-    border-top: 1px solid #e0e0e0;
+    background-color: var(--surface-color);
+    border-top: 1px solid var(--light-color);
     box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
     display: flex;
     align-items: center;
@@ -562,6 +689,7 @@ body {
     align-items: center;
     gap: 15px; 
     flex: 1;
+    cursor: pointer;
     min-width: 0; /* Prevents flex item from overflowing */
 }
 
@@ -576,7 +704,7 @@ body {
 .playback-album-art img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 .playback-album-art .placeholder-icon {
     width: 100%; height: 100%;
@@ -632,7 +760,7 @@ body {
 /* --- Right Side: Volume & Other Controls --- */
 .playback-extra-controls {
     display: flex;
-    justify-content: flex;
+    justify-content: flex-end;
     align-items: center;
     gap: 15px;
     padding-top: 13px;
@@ -650,7 +778,7 @@ body {
     position: absolute;
     bottom: calc(100% + 15px); /* Position above the button */
     left: 50%;
-    background-color: #2d3436;
+    background-color: var(--surface-color);
     padding: 15px 20px;
     border-radius: 8px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
@@ -665,7 +793,7 @@ body {
 }
 
 #volume-percentage {
-    color: var(--light-color);
+    color: var(--dark-color);
     font-size: 12px;
     font-weight: 600;
     min-width: 25px;
@@ -684,7 +812,7 @@ body {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-color: #636e72; 
+    background-color: var(--text-light);
     border-radius: 2px; 
     outline: none;
 }
@@ -694,7 +822,7 @@ body {
     width: 14px; 
     height: 14px;
     border-radius: 50%; 
-    background: var(--light-color); 
+    background: var(--primary-color);
     cursor: pointer;
 }
 
@@ -719,57 +847,80 @@ body {
     text-align: center;
 }
 
+/* --- New Queue View --- */
+.queue-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 30px 20px;
+}
+.queue-view-header h2 { font-size: 28px; color: var(--dark-color); }
+.queue-view-actions { display: flex; gap: 10px; }
+.btn-secondary { background: var(--light-color); color: var(--dark-color); padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.btn-danger { background: rgba(244, 67, 54, 0.1); color: #f44336; padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.btn-danger { background: rgba(244, 67, 54, 0.1); color: #f44336; padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
+.btn-danger:hover { background: #f44336; color: white; }
 
-
-/* Queue Section */
-.queue-section { padding: 0 30px 30px; }
-.queue-section h3 { font-size: 20px; margin-bottom: 15px; color: var(--dark-color); }
-.queue-list { display: flex; flex-direction: column; gap: 10px; }
+.queue-list-container {
+    padding: 0 30px 30px;
+    background: var(--surface-color);
+    border-radius: 12px;
+    margin: 0 30px;
+    color: var(--dark-color);
+ }
+ .queue-header, .queue-item {
+    display: grid;
+    grid-template-columns: 40px 4fr 3fr 2fr 80px 40px; /* Art, Title, Artist, Album, Duration, Actions */
+    gap: 10px;
+    align-items: center;
+    padding: 8px 15px;
+    font-size: 14px;
+}
+.queue-header {
+    font-weight: bold;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--text-light);
+}
 
 .queue-item {
-    display: flex; align-items: center; padding: 10px 15px;
-    background-color: white; border-radius: 8px; cursor: pointer;
-    transition: all 0.3s ease; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    position: relative;
 }
-.queue-item:hover { transform: translateX(5px); box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); }
+.queue-item:hover {
+    background-color: var(--light-color);
+}
+
 .queue-item.active {
-    background-color: rgba(108, 92, 231, 0.1); border-left: 4px solid var(--primary-color);
+    background-color: rgba(108, 92, 231, 0.1);
+    color: var(--primary-color);
 }
-.queue-section { padding: 0 30px; }
-.queue-item-icon {
-    width: 40px; height: 40px; background: #f0f0f0; border-radius: 5px;
-    display: flex; align-items: center; justify-content: center;
-    margin-right: 15px; color: var(--primary-color);
+.queue-item.dragging {
+    opacity: 0.5;
 }
-
-.queue-item-info { flex-grow: 1; overflow: hidden; }
-.queue-item-info h4 {
-    font-size: 16px; margin-bottom: 3px; color: var(--dark-color);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.queue-item.drag-over {
+    /* Add a visual indicator for the drop target */
+    border-top: 2px solid var(--primary-color);
+    background-color: rgba(108, 92, 231, 0.05);
 }
-.queue-item-info p { font-size: 12px; color: var(--text-color); }
-
-.queue-item-status { font-size: 12px; font-weight: 600; }
-.status-ready { color: var(--primary-color); }
-.status-meta { color: #f39c12; }
-
-/* Delete Button */
-.queue-remove-btn {
-    background: transparent; border: none; color: #ff6b6b;
-    cursor: pointer; padding: 8px; border-radius: 50%;
-    transition: background 0.2s; opacity: 0; margin-left: 10px;
+.queue-item.active .col-title { color: var(--primary-color); }
+.queue-item-art {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
 }
-.queue-item:hover .queue-remove-btn { opacity: 1; }
-.queue-item {
-    position: relative; /* Needed for context menu positioning */
+.queue-item-art img, .queue-item-art .placeholder-icon {
+    width: 100%;
+    height: 100%;
 }
-.queue-item:hover .track-action-btn { opacity: 1; visibility: visible; }
-
-.queue-remove-btn:hover { background-color: rgba(255, 107, 107, 0.1); }
+.queue-item .local-file-tag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background-color: var(--text-light); color: var(--text-color); }
 
 /* Empty State */
 .empty-state {
-    text-align: center; padding: 50px; color: #999;
+    text-align: center; padding: 50px; 
+    color: #999;
 }
 
 /* Modals */
@@ -779,21 +930,46 @@ body {
     justify-content: center; z-index: 1000;
 }
 .modal-content {
-    background-color: white; padding: 25px; border-radius: 10px;
+    background-color: var(--surface-color); padding: 25px; border-radius: 10px;
     width: 90%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
+.modal-content .form-group {
+    margin-bottom: 15px;
+}
+.modal-content .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    font-size: 14px;
+}
 .modal-content h3 { margin-bottom: 15px; color: var(--dark-color); }
-.modal-content input {
-    width: 100%; padding: 10px; border: 1px solid #ddd;
+.modal-content .modal-input {
+    width: 100%; padding: 10px; border: 1px solid var(--text-light);
     border-radius: 5px; margin-bottom: 20px; outline: none;
 }
-.modal-content input:focus { border-color: var(--primary-color); }
+.modal-content .modal-input:focus { border-color: var(--primary-color); }
+.modal-content textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--text-light);
+    border-radius: 5px;
+    outline: none;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    resize: vertical;
+}
+.modal-content textarea:focus { border-color: var(--primary-color); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .modal-actions button {
-    padding: 8px 16px; border: none; border-radius: 5px;
-    cursor: pointer; font-weight: 600; background: #e0e0e0; color: var(--text-color);
+    padding: 8px 16px; border: none; border-radius: 5px; 
+    cursor: pointer; font-weight: 600; background: var(--light-color); color: var(--text-color);
 }
 .modal-actions button.primary { background: var(--primary-color); color: white; }
+.modal-actions button.danger {
+    background-color: #f44336;
+    color: white;
+}
+
 
 .playing .album-art i { animation: pulse 2s infinite; }
 @keyframes pulse {
@@ -815,6 +991,61 @@ body {
     font-size: 20px;
     cursor: pointer;
 }
+
+/* --- Theme Switcher --- */
+.theme-switcher-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 0;
+    margin-bottom: 10px;
+}
+
+.theme-switcher-container .theme-icon {
+    color: var(--text-color);
+    font-size: 16px;
+}
+
+.theme-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.theme-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider { background-color: var(--primary-color); }
+input:checked + .slider:before { transform: translateX(20px); }
+.slider.round { border-radius: 24px; }
+.slider.round:before { border-radius: 50%; }
 
 /* Sidebar Playlists */
 .sidebar-playlists {
@@ -851,15 +1082,89 @@ body {
     font-weight: 600;
 }
 
-/* Playlists Section */
-.playlists-header {
+/* Discover & Playlists Sections */
+.discover-header,
+.playlists-header,
+.library-header,
+.artists-header,
+.albums-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 30px 30px 20px;
 }
 
-.playlists-header h2 { font-size: 28px; color: var(--dark-color); }
+.discover-header h2,
+.playlists-header h2,
+.library-header h2,
+.artists-header h2,
+.albums-header h2 {
+    font-size: 24px;
+    color: var(--dark-color);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.view-toggle-buttons {
+    display: flex;
+    gap: 8px;
+    background-color: var(--text-light);
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.view-toggle-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.view-toggle-btn:hover {
+    color: var(--primary-color);
+}
+
+.view-toggle-btn.active {
+    background: var(--surface-color);
+    color: var(--primary-color);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* Library List View Styles */
+.home-content-grid.list-view {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: 1fr; /* Override grid layout */
+}
+
+.home-content-grid.list-view .recent-media-card {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    align-items: center;
+    padding: 10px;
+    gap: 15px;
+}
+
+.home-content-grid.list-view .recent-media-card .album-art {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 0;
+}
+
+.home-content-grid.list-view .recent-media-card h5 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--dark-color);
+}
 
 .btn-primary {
     padding: 10px 20px;
@@ -880,7 +1185,10 @@ body {
     box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
 }
 
-.playlists-list {
+.discover-content,
+.playlists-list,
+.artists-content,
+.albums-content {
     padding: 0 30px 30px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -891,8 +1199,8 @@ body {
 /* Defines a header and row layout using CSS Grid */
 .track-list-header, .track-list-row {
     display: grid;
-    /* Columns: Track Number | Title | Artist | Duration */
-    grid-template-columns: 50px 4fr 3fr 100px; 
+    /* Columns: Checkbox | Track Number | Title | Artist | Duration | Actions */
+    grid-template-columns: 30px 50px 4fr 3fr 100px 40px;
     align-items: center;
     padding: 12px 15px;
     gap: 15px;
@@ -903,21 +1211,34 @@ body {
 .track-list-header {
     font-weight: bold;
     color: var(--text-color);
-    border-bottom: 1px solid var(--light-color);
-    margin-bottom: 10px;
+    border-bottom: 1px solid var(--text-light);
+    margin-bottom: 5px;
     padding-left: 15px; /* Adjust for track number */
 }
 
 .track-list-row {
     cursor: pointer;
     transition: background-color 0.2s;
-    background-color: white; /* Match the sidebar */
+    background-color: var(--surface-color); /* Match the sidebar */
     margin-bottom: 5px;
+}
+
+.track-list-row.selected {
+    background-color: rgba(108, 92, 231, 0.1);
+    box-shadow: inset 3px 0 0 0 var(--primary-color);
 }
 
 .track-list-row:hover {
     background-color: var(--light-color);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+.track-list-row .track-album {
+    color: var(--text-color);
+    font-size: 0.9em;
+}
+.track-list-row .track-num {
+    color: var(--text-color);
+    text-align: center;
 }
 
 .track-list-row:active {
@@ -926,15 +1247,33 @@ body {
 }
 
 .playlist-detail-header {
+    /* This will now be a generic class for all detail views */
     display: flex;
     align-items: center;
     gap: 20px;
     padding: 20px 0;
     margin-bottom: 20px;
-    border-bottom: 1px solid var(--light-color);
+    border-bottom: 1px solid var(--text-light);
 }
 
-.playlist-detail-header button {
+.detail-view-art {
+    width: 120px;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.playlist-detail-header .playlist-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.playlist-detail-header .playlist-actions {
+    margin-left: auto;
+}
+
+.playlist-detail-header .playlist-back-btn {
     /* Style for a back button if you decide to add one */
     background: none;
     border: 1px solid var(--primary-color);
@@ -945,19 +1284,125 @@ body {
 }
 
 .playlist-card {
-    background: white;
+    background: var(--surface-color);
     border-radius: 12px;
     padding: 20px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
+    position: relative; /* Needed for context menu positioning */
     flex-direction: column;
 }
 
 .playlist-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* =================================== */
+/* --- Extended Info Panel (Right) --- */
+/* =================================== */
+
+.extended-info-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 320px;    height: 100vh;
+    background-color: var(--surface-color);
+    border-left: 1px solid var(--light-color);
+    box-shadow: -5px 0 20px rgba(0,0,0,0.08);
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.4s ease-in-out;
+    padding-bottom: 90px; /* Space for playback bar */
+}
+
+.extended-info-panel.active {
+    transform: translateX(0);
+}
+
+.extended-info-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--light-color);
+    flex-shrink: 0;
+}
+
+.extended-info-panel .panel-header h3 {
+    font-size: 18px;
+    color: var(--dark-color);
+}
+
+.extended-info-panel .panel-header .control-btn {
+    color: var(--text-color);
+    opacity: 1;
+    visibility: visible;
+}
+
+.extended-info-panel .panel-content {
+    padding: 25px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.extended-album-art {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+.extended-album-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.extended-track-details {
+    text-align: center;
+    margin-bottom: 30px;
+}
+.extended-track-details h3 {
+    font-size: 22px;
+    color: var(--dark-color);
+    margin-bottom: 5px;
+}
+.extended-track-details p {
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+.lyrics-section h4 {
+    font-size: 16px;
+    color: var(--dark-color);
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lyrics-container {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--dark-color);
+    transition: all 0.3s ease;
+}
+.lyric-line {
+    padding: 4px 0;
+    transition: all 0.3s ease;
+    opacity: 0.6;
+}
+.lyric-line.active {
+    color: var(--primary-color);
+    font-weight: 600;
+    transform: scale(1.05);
+    opacity: 1;
 }
 
 .playlist-card-icon {
@@ -971,6 +1416,15 @@ body {
     color: white;
     font-size: 40px;
     margin-bottom: 15px;
+}
+.playlist-card .playlist-action-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    color: var(--text-color);
+    background: transparent;
+    box-shadow: none;
+    opacity: 0; /* Hide by default */
 }
 
 .playlist-card-name {
@@ -988,6 +1442,11 @@ body {
     color: var(--text-color);
     margin-bottom: 15px;
 }
+
+.playlist-card:hover .playlist-action-btn {
+    opacity: 1; /* Show on hover */
+}
+
 
 .playlist-card-actions {
     display: flex;
@@ -1007,7 +1466,7 @@ body {
 }
 
 .btn-edit {
-    background: #e3f2fd;
+    background: rgba(108, 92, 231, 0.1);
     color: var(--primary-color);
 }
 
@@ -1017,7 +1476,7 @@ body {
 }
 
 .btn-delete {
-    background: #ffebee;
+    background: rgba(244, 67, 54, 0.1);
     color: #f44336;
 }
 
@@ -1026,18 +1485,127 @@ body {
     color: white;
 }
 
+/* --- Album Grid Styles --- */
+.album-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 15px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.album-card:hover {
+    background-color: var(--surface-color);
+}
+
+.album-art-circular {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.album-card:hover .album-art-circular {
+    transform: scale(1.05);
+}
+
+.album-art-circular img, .album-art-circular .placeholder-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.album-name { font-weight: 600; color: var(--dark-color); margin-bottom: 4px; }
+.album-artist { font-size: 14px; color: var(--text-color); }
+
+/* --- Artist Grid Styles --- */
+.artist-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 15px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.artist-card:hover {
+    background-color: var(--surface-color);
+}
+
+.artist-art {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    background: var(--background-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.7);
+}
+
+.artist-name { font-weight: 600; color: var(--dark-color); }
+
+/* --- Selection Action Bar --- */
+.selection-action-bar {
+    position: fixed;
+    bottom: 100px; /* Above playback bar */
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    min-width: 400px;
+    background-color: var(--dark-color);
+    color: white;
+    border-radius: 12px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    padding: 12px 12px 12px 20px;
+    gap: 20px;
+    z-index: 800;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.selection-action-bar.hidden {
+    transform: translate(-50%, 150%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.selection-info { font-weight: 600; }
+.selection-actions { display: flex; gap: 10px; margin-left: auto; }
+
+#selection-clear-btn {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    box-shadow: none;
+}
+#selection-clear-btn:hover { background: rgba(255,255,255,0.2); }
+
+
+
 /* Responsive */
 @media (max-width: 992px) {
     .sidebar { width: 72px; }
     .logo span, .menu-item span, .section-header span, .open-btn span, .dropdown-item span { display: none; }
     .logo { padding: 0 10px 30px; justify-content: center; }
+    .main-content { margin-left: 72px; }
     .open-btn { justify-content: center; padding: 10px; }
     .open-btn i { margin: 0; }
     .hamburger { display: block; }
   
     .sidebar.active { width: 250px; }
     .sidebar.active span { display: inline; }
-
     /* Adjust playback bar for tablets */
     .playback-controls-center { max-width: 450px; }
     .playback-extra-controls { width: auto; justify-content: flex-end; }
@@ -1050,6 +1618,22 @@ body {
         transition: left 0.3s ease; z-index: 1200;
     }
     .sidebar.active { left: 0; width: 250px; }
+    .main-content { margin-left: 0; }
+
+    /* --- Mobile Extended Info Panel (Full Screen) --- */
+    .extended-info-panel {
+        width: 100%;
+        height: 100%;
+        z-index: 1100; /* Above playback bar/nav but below sidebar overlay */
+        padding-bottom: 0; /* No need for playback bar padding */
+        border-left: none; /* No border on mobile */
+    }
+
+    /* When panel is active on mobile, it covers everything, so no margin shift needed */
+    .main-content.panel-active {
+        margin-right: 0;
+    }
+
 
     /* --- Mobile Playback Bar (Mini-Player) --- */
     .playback-bar {
@@ -1088,8 +1672,7 @@ body {
     .bottom-nav {
         display: flex; justify-content: space-around; align-items: center;
         position: fixed; bottom: 0; left: 0; width: 100%;
-        height: 56px;
-        background: white; 
+        height: 56px;         background: var(--surface-color); 
         border-top: 1px solid #e0e0e0; 
         z-index: 1000;
         box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
@@ -1097,6 +1680,7 @@ body {
     .bottom-nav .nav-item {
         flex-grow: 1; text-align: center; color: var(--text-color);
         font-size: 12px; cursor: pointer;
+        padding: 5px 0;
     }
     .bottom-nav .nav-item i {
         display: block; font-size: 20px; margin-bottom: 3px; color: var(--dark-color);
@@ -1105,4 +1689,4 @@ body {
     
     /* Adjust padding for both bars */
     .main-content { padding-bottom: 130px; /* 64px player + 56px nav + buffer */ }
-}
+ }
