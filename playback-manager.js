@@ -8,9 +8,9 @@ let config = {
     nextBtn: null,
     prevBtn: null,
     updatePlaybackBar: () => {},
-    renderQueueTable: () => {},
+    renderQueueTable: () => {}, // This will be called from script.js now
     savePlaybackState: () => {},
-    handleTimeUpdate: () => {},
+    onTimeUpdate: () => {},
 };
 
 let repeatState = 0; // 0: no-repeat, 1: repeat-all, 2: repeat-one
@@ -20,22 +20,26 @@ export function init(dependencies) {
     repeatState = config.playerContext.repeatState || 0;
 
     // Attach event listeners
-    config.playBtn.addEventListener('click', () => config.playerContext.isPlaying ? pauseTrack() : playTrack());
+    config.playBtn.addEventListener('click', togglePlayPause);
     config.nextBtn.addEventListener('click', nextTrack);
     config.prevBtn.addEventListener('click', prevTrack);
     config.shuffleBtn.addEventListener('click', toggleShuffle);
     config.repeatBtn.addEventListener('click', toggleRepeat);
 
-    config.audioPlayer.addEventListener('timeupdate', config.handleTimeUpdate);
+    config.audioPlayer.addEventListener('timeupdate', config.onTimeUpdate);
     config.audioPlayer.addEventListener('ended', nextTrack);
+    config.audioPlayer.addEventListener('error', handlePlaybackError);
 }
 
-export function playTrack() {
+function playTrack() {
     if (!config.audioPlayer.src) return;
-    config.playerContext.isPlaying = true;
-    config.audioPlayer.play().catch(e => console.error("Playback failed:", e));
-    config.playIcon.className = 'fas fa-pause';
-    document.querySelector('.playback-bar')?.classList.add('playing');
+    config.audioPlayer.play()
+        .then(() => {
+            config.playerContext.isPlaying = true;
+            config.playIcon.className = 'fas fa-pause';
+            document.querySelector('.playback-bar')?.classList.add('playing');
+        })
+        .catch(handlePlaybackError);
 }
 
 export function pauseTrack() {
@@ -45,6 +49,17 @@ export function pauseTrack() {
     document.querySelector('.playback-bar')?.classList.remove('playing');
 }
 
+export function togglePlayPause() {
+    if (config.playerContext.isPlaying) {
+        pauseTrack();
+    } else {
+        // If there's a track loaded but paused, play it.
+        if (config.playerContext.currentTrackIndex > -1) {
+            playTrack();
+        }
+    }
+}
+
 export function loadTrack(index, autoPlay = true) {
     config.playerContext.currentTrackIndex = index;
     const track = config.playerContext.trackQueue[index];
@@ -52,7 +67,7 @@ export function loadTrack(index, autoPlay = true) {
     config.audioPlayer.src = track.objectURL;
     config.updatePlaybackBar(track);
 
-    config.renderQueueTable();
+    // The queue is rendered by the caller (e.g., script.js) to ensure correct timing
     config.savePlaybackState();
     if (autoPlay) {
         playTrack();
@@ -61,13 +76,10 @@ export function loadTrack(index, autoPlay = true) {
 
 export function startPlayback(trackIds, startIndex = 0, shuffle = false) {
     if (!trackIds || trackIds.length === 0) return;
-
-    let newQueue = trackIds.map(item => {
-        return (typeof item === 'string') ? config.playerContext.libraryTracks.find(t => t.id === item) : item;
-    }).filter(Boolean);
+    
+    let newQueue = trackIds.map(id => config.playerContext.libraryTracks.find(t => t.id === id)).filter(Boolean);
 
     if (newQueue.length === 0) {
-        config.playerContext.showMessage("Could not load the selected track for playback.");
         return;
     }
 
@@ -81,30 +93,37 @@ export function startPlayback(trackIds, startIndex = 0, shuffle = false) {
     }
 
     config.playerContext.trackQueue = newQueue;
-    loadTrack(startIndex);
+    loadTrack(startIndex, true);
+    config.renderQueueTable(); // Render the new queue
 }
 
 function nextTrack() {
-    if (!config.playerContext.trackQueue || config.playerContext.trackQueue.length === 0) return;
-    let nextIndex = config.playerContext.isShuffled 
-        ? Math.floor(Math.random() * config.playerContext.trackQueue.length) 
-        : config.playerContext.currentTrackIndex + 1;
+    const { trackQueue, currentTrackIndex, isShuffled } = config.playerContext;
+    if (!trackQueue || trackQueue.length === 0) return;
     
     if (repeatState === 2) { // Repeat One
-        if (config.playerContext.currentTrackIndex !== -1) loadTrack(config.playerContext.currentTrackIndex, true);
+        if (currentTrackIndex !== -1) {
+            config.audioPlayer.currentTime = 0;
+            playTrack();
+        }
         return;
     }
 
-    if (nextIndex >= config.playerContext.trackQueue.length) { // End of queue
+    let nextIndex = isShuffled 
+        ? Math.floor(Math.random() * trackQueue.length) 
+        : currentTrackIndex + 1;
+
+    if (nextIndex >= trackQueue.length) { // End of queue
         if (repeatState === 1) { // Repeat All
             nextIndex = 0;
         } else { // No repeat
             pauseTrack();
+            config.audioPlayer.currentTime = 0;
             return;
         }
     }
     
-    if (config.playerContext.trackQueue[nextIndex]?.objectURL) {
+    if (trackQueue[nextIndex]?.objectURL) {
         loadTrack(nextIndex);
     }
 }
@@ -117,6 +136,15 @@ function prevTrack() {
     }
     const prevIndex = (config.playerContext.currentTrackIndex - 1 + config.playerContext.trackQueue.length) % config.playerContext.trackQueue.length;
     if (config.playerContext.trackQueue[prevIndex]?.objectURL) loadTrack(prevIndex);
+}
+
+function handlePlaybackError(e) {
+    console.error("Audio playback error:", e);
+    const track = config.playerContext.trackQueue[config.playerContext.currentTrackIndex];
+    if (track) {
+        config.showMessage(`Error playing "${track.name}". The file may be corrupt or unsupported.`);
+    }
+    pauseTrack();
 }
 
 function toggleShuffle() {
@@ -153,7 +181,11 @@ export function getRepeatState() {
 }
 
 export function setRepeatState(state) {
-    repeatState = state;
+    const validState = parseInt(state, 10);
+    if (!isNaN(validState) && validState >= 0 && validState <= 2) {
+        repeatState = validState;
+        updateRepeatButtonUI();
+    }
 }
 
 export function setShuffleState(shuffle) {

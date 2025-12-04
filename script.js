@@ -5,6 +5,7 @@ import * as AlbumManager from './album-manager.js';
 import * as ArtistManager from './artist-manager.js';
 import * as QueueManager from './queue-manager.js';
 import * as DiscoverManager from './discover-manager.js';
+import * as UIManager from './ui-manager.js';
 import { db } from './db.js'; // Import the new Dexie DB instance
 
 // --- Shared Context & State ---
@@ -16,15 +17,11 @@ const playerContext = {
     isPlaying: false,
     isShuffled: false,
     selectedTrackIds: new Set(),
-    repeatState: 0, // 0: no-repeat, 1: repeat-all, 2: repeat-one
-    dbInstance: db, // Use the Dexie instance
-    loadTrack: () => {},
-    renderTrackContextMenu: () => {},
-    // Add a reference for showMessage to the context
-    showMessage: () => {},
+    repeatState: 0, // 0: no-repeat, 1: repeat-all, 2: repeat-one. Managed by PlaybackManager
 };
 const PLAYBACK_STATE_KEY = 'genesis_playback_state';
 
+document.addEventListener('DOMContentLoaded', function() {
     // --- DOM Elements ---
     const audioPlayer = document.getElementById('audio-player');
     const playBtn = document.getElementById('play-btn');
@@ -38,7 +35,6 @@ const PLAYBACK_STATE_KEY = 'genesis_playback_state';
     const progressFill = document.getElementById('progress-fill');
     const currentTimeEl = document.getElementById('current-time');
     const durationEl = document.getElementById('duration');
-    
     const progressHead = document.getElementById('progress-head');
     
     const volumeSlider = document.getElementById('volume-slider');
@@ -48,8 +44,9 @@ const PLAYBACK_STATE_KEY = 'genesis_playback_state';
     const muteBtn = document.getElementById('mute-btn');
     const volumeIcon = document.getElementById('volume-icon');
     const songTitle = document.getElementById('song-title');
-    const artistName = document.getElementById('artist-name');
-    const queueList = document.getElementById('queue-list');
+    const artistName = document.getElementById('artist-name');    
+    const albumArtImg = document.getElementById('album-art-img');
+    const albumArtPlaceholder = document.getElementById('album-art-placeholder');
     const recentMediaGrid = document.getElementById('recent-media-grid');
     const libraryGrid = document.getElementById('library-grid');
     // Playlist View Elements
@@ -58,6 +55,7 @@ const PLAYBACK_STATE_KEY = 'genesis_playback_state';
     const artistsContent = document.querySelector('#artists-section .artists-content');
     const playlistsListContainer = document.getElementById('playlists-section');
     const playlistsList = document.getElementById('playlists-list');
+    const sidebarPlaylistsContainer = document.getElementById('sidebar-playlists');
     const playlistDetailView = document.getElementById('playlist-detail-view');
     
     // Navigation & Menu
@@ -74,6 +72,7 @@ const PLAYBACK_STATE_KEY = 'genesis_playback_state';
     const folderInput = document.getElementById('folder-input');
     const searchInput = document.getElementById('search-input');
     
+    const themeToggle = document.getElementById('theme-toggle-checkbox');
     const profilePicInput = document.getElementById('profile-pic-input');
     const profilePic = document.getElementById('profile-pic');
 
@@ -127,71 +126,6 @@ const PLAYBACK_STATE_KEY = 'genesis_playback_state';
     const extendedInfoTitle = document.getElementById('extended-info-title');
     const extendedInfoArtist = document.getElementById('extended-info-artist');
 
-    const lyricsContainer = document.getElementById('lyrics-container');
-    let currentLyricIndex = -1; // For tracking synchronized lyrics
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Assign showMessage to the context so other functions can use it
-    playerContext.showMessage = showMessage;
-    playerContext.loadTrack = PlaybackManager.loadTrack;
-    playerContext.renderTrackContextMenu = renderTrackContextMenu;
-    // Assign state arrays to the context
-    let libraryTracks = playerContext.libraryTracks;
-    let trackQueue = playerContext.trackQueue;
-    let dbInstance = playerContext.dbInstance; // This is now the Dexie instance
-
-    // Initialize the Playlist Manager
-    PlaylistManager.init({
-        playlistsListContainer,
-        playlistDetailView,
-        playlistsList,
-        sidebarPlaylistsContainer: document.getElementById('sidebar-playlists'), // Removed duplicate
-        createPlaylistBtn: document.getElementById('create-playlist-btn'),
-        getLibraryTracks: () => playerContext.libraryTracks, // Use context
-        loadTrack: loadTrack,
-        showMessage: showMessage, // Removed duplicate
-        renderTrackContextMenu: renderTrackContextMenu,
-        getTrackDetailsFromId: LibraryManager.getTrackDetailsFromId,
-        startPlayback: startPlayback, // Pass startPlayback
-        showConfirmation: showConfirmation // Pass the confirmation function
-    });
-
-    // --- Helpers ---
-    function showMessage(msg) {
-        msgText.innerHTML = msg; // Use innerHTML to allow basic formatting
-        msgModal.classList.remove('hidden');
-    }
-
-    /**
-     * Shows a confirmation modal and returns a Promise that resolves on user action.
-     * @param {string} title - The title for the modal.
-     * @param {string} text - The confirmation message.
-     * @returns {Promise<boolean>} - Resolves with true if confirmed, false if cancelled.
-     */
-    function showConfirmation(title, text) {
-        return new Promise(resolve => {
-            confirmModalTitle.textContent = title;
-            confirmModalText.innerHTML = text; // Use innerHTML for formatting
-            confirmModal.classList.remove('hidden');
-
-            confirmOkBtn.onclick = () => {
-                confirmModal.classList.add('hidden');
-                resolve(true);
-            };
-            confirmCancelBtn.onclick = () => {
-                confirmModal.classList.add('hidden');
-                resolve(false);
-            };
-        });
-    }
-    
-    function formatTime(seconds) {
-        if (isNaN(seconds) || seconds < 0) return "0:00";
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-
     function isValidString(str) {
         if (!str || typeof str !== 'string' || str.trim() === '') {
             return false;
@@ -212,8 +146,8 @@ document.addEventListener('DOMContentLoaded', function() {
             trackId: playerContext.trackQueue[playerContext.currentTrackIndex].id, // Save by ID for robustness
             currentTime: audioPlayer.currentTime,
             volume: audioPlayer.volume,
-            isShuffled: playerContext.isShuffled,
-            repeatState: repeatState,
+            isShuffled: playerContext.isShuffled, // repeatState is managed by PlaybackManager
+            repeatState: playerContext.repeatState,
             // isPlaying is not saved, to prevent auto-play on refresh
         };
         localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(state));
@@ -234,10 +168,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (track.audioBlob) {
                             trackData.objectURL = URL.createObjectURL(track.audioBlob);
                         }
-                        // **THE FIX**: Create a fresh objectURL for the cover art from its blob
-                        if (track.coverBlob) {
-                            trackData.coverURL = URL.createObjectURL(track.coverBlob);
-                        } else if (track.albumArtUrl) {
+                        // Create a fresh objectURL for the cover art from its blob
+                        if (track.albumArtBlob) {
+                            trackData.coverURL = URL.createObjectURL(track.albumArtBlob);
+                        } else if (track.albumArtUrl) { // Fallback for older tracks
                             // For discovered tracks that haven't been downloaded, use the permanent URL
                             trackData.coverURL = track.albumArtUrl;
                         }
@@ -252,8 +186,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 playerContext.libraryTracks = await Promise.all(restorationPromises);
                 playerContext.trackQueue = [...playerContext.libraryTracks]; // Default play queue to the full library
-                renderHomeGrid(); // Render the library on home
-                renderLibraryGrid(); // Also render the full library
+                UIManager.renderHomeGrid();
+                UIManager.renderLibraryGrid();
                 // We can load the first library track for display, but not play it.
                 if (playerContext.libraryTracks.length > 0) {
                     // Try to restore playback state AFTER library is loaded
@@ -271,24 +205,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Wait for metadata to load before setting currentTime
                             audioPlayer.onloadedmetadata = () => {
                                 audioPlayer.currentTime = currentTime;
-                                updateProgressBarUI(currentTime, audioPlayer.duration);
+                                UIManager.updateProgressBarUI(currentTime, audioPlayer.duration);
                                 audioPlayer.onloadedmetadata = null; // Clean up listener
                             };
 
-                            updatePlaybackBar(track);
-                            renderQueueTable();
+                            UIManager.updatePlaybackBar(track);
+                            QueueManager.renderQueueTable();
 
                             // Restore controls state
                             audioPlayer.volume = volume;
                             volumeSlider.value = volume;
                             playerContext.isShuffled = savedShuffle;
-                            shuffleBtn.style.color = playerContext.isShuffled ? 'var(--primary-color)' : 'var(--text-color)';
-                            repeatState = savedRepeat;
-                            updateRepeatButtonUI();
+                            PlaybackManager.setShuffleState(savedShuffle);
+                            PlaybackManager.setRepeatState(savedRepeat);
                         }
                     } else {
                         // If no saved state, just show the first track
-                        updatePlaybackBar(playerContext.libraryTracks[0]);
+                        UIManager.updatePlaybackBar(playerContext.libraryTracks[0]);
                     }
                 }
             }
@@ -301,17 +234,72 @@ document.addEventListener('DOMContentLoaded', function() {
         if (savedPic && profilePic) profilePic.src = savedPic;
     }
 
+    // --- INITIALIZATION ---
+
+    // Initialize UI Manager
+    UIManager.init({
+        playerContext,
+        dom: { // Pass all relevant DOM elements
+            mainSections, menuItems, bottomNavItems, albumDetailView, artistDetailView,
+            msgModal, msgText, confirmModal, confirmModalTitle, confirmModalText, confirmOkBtn, confirmCancelBtn,
+            recentMediaGrid, libraryGrid, libraryGridViewBtn, libraryListViewBtn,
+            songTitle, artistName, albumArtImg, albumArtPlaceholder,
+            progressFill, progressHead, currentTimeEl, durationEl,
+            extendedInfoPanel, mainContent, playbackBarTrackInfo, closeExtendedPanelBtn,
+            extendedInfoArt, extendedInfoTitle, extendedInfoArtist, lyricsContainer: document.getElementById('lyrics-container'),
+            editModal, editTrackIdInput, editTitleInput, editArtistInput, editAlbumInput, editLyricsInput,
+            selectionBar, selectionCount,
+            themeToggle,
+        },
+        callbacks: { // Pass functions for UI to trigger logic
+            playTrackFromId,
+            handleContextMenuAction,
+            createPlaylistFromTrack: (trackId) => {
+                const newName = prompt('Enter new playlist name:');
+                if (newName && newName.trim()) {
+                    const newPlaylistId = PlaylistManager.createPlaylist(newName, false);
+                    if (newPlaylistId) {
+                        PlaylistManager.addTrackToPlaylist(newPlaylistId, trackId);
+                        UIManager.showMessage(`Added track to new playlist "${newName.trim()}".`);
+                        PlaylistManager.refresh();
+                    }
+                }
+            },
+            addTrackToPlaylist: (playlistId, trackId) => {
+                PlaylistManager.addTrackToPlaylist(playlistId, trackId);
+                const playlist = PlaylistManager.getPlaylists()[playlistId];
+                UIManager.showMessage(`Added track to "${playlist.name}".`);
+            },
+            getPlaylists: PlaylistManager.getPlaylists,
+        }
+    });
+
+    // Initialize Playlist Manager
+    PlaylistManager.init({
+        playlistsListContainer,
+        playlistDetailView,
+        playlistsList,
+        sidebarPlaylistsContainer,
+        createPlaylistBtn: document.getElementById('create-playlist-btn'),
+        getLibraryTracks: () => playerContext.libraryTracks,
+        showMessage: UIManager.showMessage,
+        renderTrackContextMenu: UIManager.renderTrackContextMenu,
+        getTrackDetailsFromId: (id) => playerContext.libraryTracks.find(t => t.id === id),
+        startPlayback: PlaybackManager.startPlayback,
+        showConfirmation: UIManager.showConfirmation
+    });
+
     // Initialize the Library Manager
     LibraryManager.init({
         getDB: () => db, // Pass Dexie instance
         saveTrackToDB: (track) => db.tracks.put(track),
         deleteTrackFromDB: (id) => db.tracks.delete(id),
-        showMessage: showMessage,
+        showMessage: UIManager.showMessage,
         getLibrary: () => playerContext.libraryTracks,
         setLibrary: (newLibrary) => { playerContext.libraryTracks = newLibrary; },
         onLibraryUpdate: () => {
-            renderHomeGrid();
-            renderLibraryGrid();
+            UIManager.renderHomeGrid();
+            UIManager.renderLibraryGrid();
             ArtistManager.renderArtistsGrid();
             AlbumManager.renderAlbumsGrid();
         }
@@ -327,17 +315,17 @@ document.addEventListener('DOMContentLoaded', function() {
         playBtn,
         nextBtn,
         prevBtn,
-        updatePlaybackBar,
+        updatePlaybackBar: UIManager.updatePlaybackBar,
         renderQueueTable: QueueManager.renderQueueTable,
         savePlaybackState,
-        handleTimeUpdate,
+        onTimeUpdate: handleTimeUpdate,
     });
 
     // Initialize Album and Artist Managers
     AlbumManager.init({
         playerContext, albumsContent, albumDetailView, albumsSection,
         startPlayback: PlaybackManager.startPlayback,
-        showMessage,
+        showMessage: UIManager.showMessage,
         renderDetailTrackList,
     });
 
@@ -345,28 +333,29 @@ document.addEventListener('DOMContentLoaded', function() {
         playerContext, artistsContent, artistDetailView,
         artistsSection: document.getElementById('artists-section'),
         startPlayback: PlaybackManager.startPlayback,
-        showMessage,
+        showMessage: UIManager.showMessage,
+        getTrackDetailsFromId,
         renderDetailTrackList,
     });
 
     // Initialize Queue and Discover Managers
     QueueManager.init({
         playerContext,
-        queueList,
+        queueList: document.getElementById('queue-list'),
         queueHeaderTitle: document.getElementById('queue-header-title'),
         queueClearBtn: document.getElementById('queue-clear-btn'),
         queueSavePlaylistBtn: document.getElementById('queue-save-playlist-btn'),
-        showMessage,
-        showConfirmation,
-        formatTime,
+        showMessage: UIManager.showMessage,
+        showConfirmation: UIManager.showConfirmation,
+        formatTime: UIManager.formatTime,
         loadTrack: PlaybackManager.loadTrack,
-        renderTrackContextMenu,
+        renderTrackContextMenu: UIManager.renderTrackContextMenu,
         PlaylistManager,
     });
 
     DiscoverManager.init({
         discoverContent: document.querySelector('#discover-section .discover-content'),
-        showMessage,
+        showMessage: UIManager.showMessage,
         startPlayback: PlaybackManager.startPlayback, // For streaming
         downloadAndCacheTrack: downloadAndCacheTrack, // For caching
     });
@@ -377,17 +366,17 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     async function downloadAndCacheTrack(track) {
         if (!track || !track.id) {
-            showMessage('Invalid track data provided.');
+            UIManager.showMessage('Invalid track data provided.');
             return;
         }
 
         // Check if track is already in the library
         if (playerContext.libraryTracks.some(t => t.id === track.id.toString())) {
-            showMessage(`"${track.name}" is already in your library.`);
+            UIManager.showMessage(`"${track.name}" is already in your library.`);
             return;
         }
 
-        showMessage(`Downloading "${track.name}"...`);
+        UIManager.showMessage(`Downloading "${track.name}"...`);
 
         try {
             const response = await fetch(`/download/${track.id}`);
@@ -409,175 +398,33 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Use the existing file handling logic to process and save the track
             await handleFiles([audioFile], { isFromDiscover: true, discoverData: trackData });
-            showMessage(`Successfully added "${track.name}" to your library!`);
+            UIManager.showMessage(`Successfully added "${track.name}" to your library!`);
         } catch (error) {
             console.error('Error downloading or caching track:', error);
-            showMessage(`Failed to add "${track.name}" to library. Please try again.`);
+            UIManager.showMessage(`Failed to add "${track.name}" to library. Please try again.`);
         }
     }
 
     // --- Theme Toggle Logic ---
-    const themeToggle = document.getElementById('theme-toggle-checkbox');
     const THEME_KEY = 'genesis_theme';
-
-    function applyTheme(theme) {
-        if (theme === 'dark') {
-            document.body.classList.add('dark-theme');
-            if (themeToggle) themeToggle.checked = true;
-        } else {
-            document.body.classList.remove('dark-theme');
-            if (themeToggle) themeToggle.checked = false;
-        }
-    }
 
     if (themeToggle) {
         themeToggle.addEventListener('change', () => {
             const newTheme = themeToggle.checked ? 'dark' : 'light';
             localStorage.setItem(THEME_KEY, newTheme);
-            applyTheme(newTheme);
+            UIManager.applyTheme(newTheme);
         });
     }
-    applyTheme(localStorage.getItem(THEME_KEY) || 'light'); // Apply saved or default theme
+    UIManager.applyTheme(localStorage.getItem(THEME_KEY) || 'light'); // Apply saved or default theme
 
     // --- Navigation Logic ---
-    function switchSection(targetId) {
-        // Hide all sections
-        mainSections.forEach(section => section.classList.add('hidden'));
-        
-        // Also hide detail views when switching main sections
-        if (albumDetailView) albumDetailView.classList.add('hidden');
-        if (artistDetailView) artistDetailView.classList.add('hidden');
-
-        // Show target section
-        const target = document.getElementById(targetId);
-        if (target) target.classList.remove('hidden');
-
-        // Update active state in Sidebar
-        menuItems.forEach(item => {
-            if (item.dataset.target === targetId) item.classList.add('active');
-            else item.classList.remove('active');
-        });
-
-        // Update active state in Bottom Nav
-        bottomNavItems.forEach(item => {
-            if (item.dataset.target === targetId) item.classList.add('active');
-            else item.classList.remove('active');
-        });
-    }
-
     menuItems.forEach(item => {
-        item.addEventListener('click', () => switchSection(item.dataset.target));
+        item.addEventListener('click', () => UIManager.switchSection(item.dataset.target));
     });
     
     bottomNavItems.forEach(item => {
-        item.addEventListener('click', () => switchSection(item.dataset.target));
+        item.addEventListener('click', () => UIManager.switchSection(item.dataset.target));
     });
-
-    // --- Player Core ---
-    function renderQueue() {
-        // This function now renders both the main queue table and the home grid
-        renderQueueTable(); // Renders the play queue
-        renderHomeGrid();
-        renderLibraryGrid();
-    }
-
-    function renderHomeGrid() {
-        if (!recentMediaGrid) return;
-        
-        // Show the last 12 items as "recent"
-        const recentTracks = [...playerContext.libraryTracks].reverse().slice(0, 12);
-
-        if (recentTracks.length === 0) {
-            recentMediaGrid.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">Your recent media will appear here.</div>`;
-            return;
-        }
-
-        recentMediaGrid.innerHTML = recentTracks.map((track) => {
-            const libraryIndex = playerContext.libraryTracks.findIndex(t => t.id === track.id);
-            return `
-                <div class="recent-media-card" data-track-id="${track.id}">
-                    <div class="album-art">
-                        ${track.coverURL ? `<img src="${track.coverURL}" alt="${track.name}">` : `<div class="placeholder-icon"><i class="fas fa-music"></i></div>`}
-                    </div>
-                    <div class="card-footer">
-                        <h5>${track.name}</h5>
-                        <button class="control-btn small track-action-btn" title="More options"><i class="fas fa-ellipsis-v"></i></button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        // Add event listeners
-        recentMediaGrid.querySelectorAll('.recent-media-card').forEach(card => {
-            const trackId = card.dataset.trackId;
-            const libraryIndex = playerContext.libraryTracks.findIndex(t => t.id === trackId);
-
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.track-action-btn')) return;
-                // Clicking a home item now adds it to the queue and plays it.
-                if (libraryIndex > -1 && playerContext.libraryTracks[libraryIndex].objectURL) {
-                    playerContext.trackQueue = [playerContext.libraryTracks[libraryIndex]]; // Replace queue with this track
-                    loadTrack(0); // Play the first (and only) track in the new queue
-                }
-            });
-
-            card.querySelector('.track-action-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                renderTrackContextMenu(trackId, e.currentTarget, { isFromLibrary: true });
-            });
-        });
-    }
-
-    function renderLibraryGrid() {
-        if (!libraryGrid) return;
-
-        // Show all tracks, sorted alphabetically by name
-        const sortedTracks = [...playerContext.libraryTracks].sort((a, b) => a.name.localeCompare(b.name));
-
-        if (sortedTracks.length === 0) {
-            libraryGrid.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">Your library is empty. Open some files to get started.</div>`;
-            return;
-        }
-
-        libraryGrid.innerHTML = sortedTracks.map((track) => {
-            return `
-                <div class="recent-media-card" data-track-id="${track.id}">
-                    <div class="album-art">
-                        ${track.coverURL ? `<img src="${track.coverURL}" alt="${track.name}">` : `<div class="placeholder-icon"><i class="fas fa-music"></i></div>`}
-                    </div>
-                    <div class="card-footer">
-                        <h5>${track.name}</h5>
-                        <button class="control-btn small track-action-btn" title="More options"><i class="fas fa-ellipsis-v"></i></button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        // Add event listeners
-        libraryGrid.querySelectorAll('.recent-media-card').forEach(card => {
-            const trackId = card.dataset.trackId;
-            const libraryIndex = playerContext.libraryTracks.findIndex(t => t.id === trackId);
-
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.track-action-btn')) return;
-                if (libraryIndex > -1 && playerContext.libraryTracks[libraryIndex].objectURL) {
-                    // Create a new sorted queue from the library
-                    const newQueue = [...playerContext.libraryTracks].sort((a, b) => a.name.localeCompare(b.name));
-                    // Find the index of the clicked track in the new sorted queue
-                    const newQueueIndex = newQueue.findIndex(t => t.id === trackId);
-                    if (newQueueIndex > -1) {
-                        playerContext.trackQueue = newQueue; // Set the global queue
-                        loadTrack(newQueueIndex); // Play from the correct index
-                    }
-                }
-            });
-
-            card.querySelector('.track-action-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                renderTrackContextMenu(trackId, e.currentTarget, { isFromLibrary: true });
-            });
-        });
-    }
 
     async function handleRemoveTrack(trackId) {
         const index = playerContext.libraryTracks.findIndex(t => t.id === trackId);
@@ -588,13 +435,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isCurrentlyPlaying) {
             audioPlayer.src = '';
-            songTitle.textContent = "No Track Selected";
-            artistName.textContent = "Load files to begin";
-            // hide album art
-            const artImg = document.getElementById('album-art-img');
-            const placeholder = document.getElementById('album-art-placeholder');
-            if (artImg) { artImg.src = ''; artImg.classList.add('hidden'); }
-            if (placeholder) placeholder.classList.remove('hidden');
+            UIManager.updatePlaybackBar(null);
         }
 
         await LibraryManager.removeTrack(trackId);
@@ -606,7 +447,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 playerContext.currentTrackIndex--;
             } else if (queueIndex === playerContext.currentTrackIndex) {
                 // If it was the current track, stop playback and try to play next
-                pauseTrack();
+                PlaybackManager.pauseTrack();
                 if (playerContext.trackQueue.length > 0) {
                     // Play the next available track
                     PlaybackManager.loadTrack(playerContext.currentTrackIndex % playerContext.trackQueue.length);
@@ -628,6 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const trackRows = await Promise.all(trackIds.map(async (trackId, index) => {
             try {
                 const trackData = await getTrackDetailsFromId(trackId);
+                if (!trackData) return null; // Skip if track details not found
                 const row = document.createElement('div');
                 row.className = 'track-list-row';
                 row.dataset.id = trackId;
@@ -635,10 +477,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 row.innerHTML = `
                     <input type="checkbox" class="track-select-checkbox" data-id="${trackId}">
-                    <span class="track-num">${index + 1}</span>
+                    <span class="track-num">${options.isPlaylist ? '<i class="fas fa-grip-vertical"></i>' : index + 1}</span>
                     <span class="track-title">${trackData.name || 'Unknown Title'}</span>
-                    <span class="track-album">${secondaryInfo}</span>
-                    <span class="track-duration">${formatTime(trackData.duration)}</span>
+                    <span class="track-secondary">${secondaryInfo}</span>
+                    <span class="track-duration">${UIManager.formatTime(trackData.duration)}</span>
                     <button class="control-btn small track-action-btn" title="More options"><i class="fas fa-ellipsis-v"></i></button>
                 `;
 
@@ -651,7 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 row.querySelector('.track-action-btn').addEventListener('click', e => {
                     e.stopPropagation();
-                    renderTrackContextMenu(trackId, e.currentTarget, { isFromLibrary: true });
+                    UIManager.renderTrackContextMenu(trackId, e.currentTarget, { isFromLibrary: true, ...options });
                 });
 
                 row.querySelector('.track-select-checkbox').addEventListener('change', (e) => {
@@ -670,7 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
         trackRows.filter(Boolean).forEach(row => container.appendChild(row));
 
         // Add event listener for the "Select All" checkbox in the header
-        const selectAllCheckbox = container.previousElementSibling.querySelector('.select-all-checkbox');
+        const selectAllCheckbox = container.previousElementSibling?.querySelector('.select-all-checkbox');
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', (e) => {
                 const isChecked = e.currentTarget.checked;
@@ -695,264 +537,66 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             playerContext.selectedTrackIds.add(trackId);
         }
-        updateSelectionBar();
+        UIManager.updateSelectionBar();
     }
 
-    function updateSelectionBar() {
-        const count = playerContext.selectedTrackIds.size;
-        if (count > 0) {
-            selectionCount.textContent = count;
-            selectionBar.classList.remove('hidden');
-        } else {
-            selectionBar.classList.add('hidden');
-        }
-    }
-
-    function clearSelection() {
-        playerContext.selectedTrackIds.clear();
-        document.querySelectorAll('.track-select-checkbox:checked').forEach(cb => cb.checked = false);
-        document.querySelectorAll('.track-list-row.selected').forEach(row => row.classList.remove('selected'));
-        updateSelectionBar();
-    }
-
-    function updatePlaybackBar(track) {
-        const titleEl = document.getElementById('song-title');
-        const trackName = track.name;
-        titleEl.textContent = trackName;
-        artistName.textContent = track.artist || (track.isURL ? 'Web Stream' : 'Unknown Artist');
-        
-        // Update album art
-        const artImg = document.getElementById('album-art-img');
-        const placeholder = document.getElementById('album-art-placeholder');
-        if (track.coverURL && artImg) {
-            artImg.src = track.coverURL;
-            artImg.classList.remove('hidden');
-            if (placeholder) placeholder.classList.add('hidden');
-        } else {
-            if (artImg) { artImg.src = ''; artImg.classList.add('hidden'); }
-            if (artImg) {
-                artImg.classList.add('hidden'); // Hide the image tag
-                artImg.src = ''; // Clear the source
-            }
-            if (placeholder) placeholder.classList.remove('hidden');
-        }
-
-        // Update extended info panel if it's open
-        if (extendedInfoPanel.classList.contains('active')) {
-            updateExtendedInfoPanel(track);
-        }
-    }
-
-    function updateExtendedInfoPanel(track) {
-        if (track) {
-            extendedInfoArt.innerHTML = track.coverURL 
-                ? `<img src="${track.coverURL}" alt="Album Art">`
-                : `<div class="placeholder-icon"><i class="fas fa-music"></i></div>`;
-            extendedInfoTitle.textContent = track.name;
-            extendedInfoArtist.textContent = track.artist || 'Unknown Artist';
-            // In a real scenario, you would also fetch and display lyrics here.
-            
-            // Reset lyric state for the new track
-            currentLyricIndex = -1;
-
-            // Update lyrics display
-            if (track.syncedLyrics && track.syncedLyrics.length > 0) {
-                // Render LRC lyrics as individual lines
-                lyricsContainer.innerHTML = track.syncedLyrics.map((line, index) => 
-                    `<p class="lyric-line" data-index="${index}">${line.text || '&nbsp;'}</p>`
-                ).join('');
-            } else if (track.lyrics) {
-                // Format lyrics by replacing newlines with <br> tags for HTML display
-                lyricsContainer.innerHTML = track.lyrics.replace(/\n/g, '<br>');
-            } else {
-                lyricsContainer.innerHTML = '<p class="lyric-line" style="color: var(--text-color); font-style: italic;">No lyrics found for this track.</p>';
-            }
-        }
-    }
-
-
-    // --- Context Menu Functions ---
-    
-    function closeContextMenu() {
-        if (openContextMenu) { // Use local `openContextMenu`
-            openContextMenu.classList.remove('active');
-            openContextMenu.remove(); // Clean up from DOM
-            openContextMenu = null;
-        }
-    }
-
-    // Global click listener to close the menu when clicking anywhere else
-    document.addEventListener('click', (event) => {
-        if (openContextMenu && !openContextMenu.contains(event.target) && !event.target.closest('.track-action-btn')) { // Use local `openContextMenu`
-            closeContextMenu();
-        }
-    });
-
-    function renderTrackContextMenu(trackId, buttonElement, options = {}) {
-        closeContextMenu();
-
-        const menu = document.createElement('div');
-        menu.className = 'context-menu';
-
-        const menuItems = [];
-
-        // Standard Actions
-        menuItems.push({ action: 'play', icon: 'fas fa-play', text: 'Play Song' });
-        menuItems.push({ action: 'play-next', icon: 'fas fa-step-forward', text: 'Play Next' });
-        
-        const submenu = document.createElement('div');
-        submenu.className = 'context-menu-submenu';
-
-        // Option to create a new playlist
-        const createNewPlaylistItem = document.createElement('div');
-        createNewPlaylistItem.className = 'context-menu-item';
-        createNewPlaylistItem.innerHTML = `<i class="fas fa-plus-circle"></i> <span>Create New Playlist</span>`;
-        createNewPlaylistItem.addEventListener('click', () => {
-            const newName = prompt('Enter new playlist name:');
-            if (newName && newName.trim()) {
-                const newPlaylistId = PlaylistManager.createPlaylist(newName, false); // Create without re-rendering everything yet
-                if (newPlaylistId) {
-                    PlaylistManager.addTrackToPlaylist(newPlaylistId, trackId);
-                    showMessage(`Added track to new playlist "${newName.trim()}".`);
-                    PlaylistManager.refresh(); // Now render all playlist views
-                }
-            }
-            closeContextMenu();
-        });
-        submenu.appendChild(createNewPlaylistItem);
-
-        const playlistIds = Object.keys(PlaylistManager.getPlaylists());
-        if (playlistIds.length > 0) {
-            playlistIds.forEach(pId => {
-                const p = PlaylistManager.getPlaylists()[pId];
-                const submenuItem = document.createElement('div');
-                submenuItem.className = 'context-menu-item';
-                submenuItem.innerHTML = `<i class="fas fa-list-ul"></i> <span>${p.name}</span>`;
-                submenuItem.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent parent menu item click
-                    PlaylistManager.addTrackToPlaylist(pId, trackId);
-                    showMessage(`Added track to "${p.name}".`);
-                    closeContextMenu();
-                });
-                submenu.appendChild(submenuItem);
-            });
-        } else {
-            // No need for a "No playlists" message if "Create New" is always there
-        }
-
-        // Add other actions based on context
-        if (options.isFromPlaylist) {
-            menuItems.push({ 
-                action: 'remove-from-playlist', 
-                icon: 'fas fa-minus-circle', 
-                text: 'Remove from this Playlist' 
-            });
-        }
-
-        if (options.isFromLibrary) {
-            menuItems.push({ action: 'add-to-queue', icon: 'fas fa-list-ol', text: 'Add to Play Queue' });
-            menuItems.push({ action: 'remove-from-library', icon: 'fas fa-trash', text: 'Remove from Library' });
-        }
-        if (options.isFromQueue) { // From the queue view
-            menuItems.push({ action: 'remove-from-queue', icon: 'fas fa-times', text: 'Remove from Queue' });
-        }
-
-        // More info actions
-        menuItems.push({ action: 'edit-info', icon: 'fas fa-edit', text: 'Edit Info' });
-        menuItems.push({ action: 'properties', icon: 'fas fa-info-circle', text: 'Properties' });
-
-        // Create and append the "Add to Playlist" item with its submenu
-        const addToPlaylistItem = document.createElement('div');
-        addToPlaylistItem.className = 'context-menu-item has-submenu';
-        addToPlaylistItem.innerHTML = `<i class="fas fa-plus"></i> <span>Add to Playlist</span> <i class="fas fa-chevron-right submenu-arrow"></i>`;
-        addToPlaylistItem.appendChild(submenu);
-        menu.appendChild(addToPlaylistItem);
-
-        menuItems.forEach(item => {
-            const itemEl = document.createElement('div');
-            itemEl.className = `context-menu-item ${item.disabled ? 'disabled' : ''}`;
-            itemEl.innerHTML = `<i class="${item.icon}"></i> <span>${item.text}</span>`;
-            itemEl.addEventListener('click', async () => { // Make the handler async to use await
-                if (item.disabled) return;
-
-                const libraryIndex = playerContext.libraryTracks.findIndex(t => t.id === trackId);
-                if (libraryIndex === -1) return;
-                const track = playerContext.libraryTracks[libraryIndex];
-
-                if (item.action === 'play') {
-                    playerContext.trackQueue = [track]; // Replace queue with this track
-                    PlaybackManager.loadTrack(0);
-                } else if (item.action === 'play-next') {
-                    if (playerContext.currentTrackIndex === -1) {
-                        // If nothing is playing, just add to queue and play
-                        playerContext.trackQueue.unshift(track);
-                        loadTrack(0);
-                    } else {
-                        // Insert after the current track
-                        playerContext.trackQueue.splice(playerContext.currentTrackIndex + 1, 0, track);
-                    }
-                    QueueManager.renderQueueTable();
-                    showMessage(`"${track.name}" will play next.`);
-                } else if (item.action === 'add-to-queue') {
-                    if (!playerContext.trackQueue.find(t => t.id === trackId)) {
-                        playerContext.trackQueue.push(track);
-                    }
-                    if (playerContext.currentTrackIndex === -1) PlaybackManager.loadTrack(playerContext.trackQueue.length - 1);
-                    QueueManager.renderQueueTable();
-                    showMessage(`Added "${track.name}" to queue.`);
-                } else if (item.action === 'remove-from-library') {
-                    const confirmed = await showConfirmation(
-                        'Remove from Library',
-                        `Are you sure you want to permanently remove "<strong>${track.name}</strong>" from your library? This action cannot be undone.`
-                    );
-                    if (confirmed) {
-                        handleRemoveTrack(trackId); // Use trackId for consistency
-                    }
-                } else if (item.action === 'remove-from-queue' && options.isFromQueue) {
-                    const queueIndex = playerContext.trackQueue.findIndex(t => t.id === trackId);
-                    if (queueIndex > -1) {
-                        playerContext.trackQueue.splice(queueIndex, 1);
-                        // If we removed a track that was before the current one,
-                        // we need to decrement the current index.
-                        if (queueIndex < playerContext.currentTrackIndex) {
-                            playerContext.currentTrackIndex--;
-                        }
-                    }
-                    QueueManager.renderQueueTable();
-                } else if (item.action === 'remove-from-playlist' && options.playlistId) {
-                    PlaylistManager.removeTrackFromPlaylist(options.playlistId, trackId);
-                    PlaylistManager.refresh(options.playlistId); // Refresh the view
-                    showMessage(`Removed track from playlist.`);
-                } else if (item.action === 'properties') {
-                    showMessage(`<b>${track.name}</b><br>Artist: ${track.artist || 'N/A'}<br>Album: ${track.album || 'N/A'}<br>Duration: ${formatTime(track.duration)}`);
-                } else if (item.action === 'edit-info') {
-                    openEditModal(trackId);
-                }
-                closeContextMenu();
-            });
-            menu.appendChild(itemEl);
-        });
-
-        // Append menu to the button's parent container
-        buttonElement.closest('.track-list-row, .queue-item, .recent-media-card').appendChild(menu);
-
-        setTimeout(() => {
-            menu.classList.add('active');
-            openContextMenu = menu;
-        }, 10);
-    }
-
-    function openEditModal(trackId) {
-        const track = playerContext.libraryTracks.find(t => t.id === trackId);
+    async function handleContextMenuAction(action, trackId, options) {
+        const track = await getTrackDetailsFromId(trackId);
         if (!track) return;
 
-        editTrackIdInput.value = track.id;
-        editTitleInput.value = track.name || '';
-        editArtistInput.value = track.artist || '';
-        editAlbumInput.value = track.album || '';
-        editLyricsInput.value = track.lyrics || '';
+        switch (action) {
+            case 'play':
+                PlaybackManager.startPlayback([trackId], 0);
+                break;
+            case 'play-next':
+                QueueManager.addTrackNext(track);
+                break;
+            case 'add-to-queue':
+                QueueManager.addTrackToQueue(track);
+                break;
+            case 'remove-from-library':
+                const confirmed = await UIManager.showConfirmation(
+                    'Remove from Library',
+                    `Are you sure you want to permanently remove "<strong>${track.name}</strong>" from your library?`
+                );
+                if (confirmed) handleRemoveTrack(trackId);
+                break;
+            case 'remove-from-queue':
+                QueueManager.removeTrackFromQueue(trackId);
+                break;
+            case 'remove-from-playlist':
+                if (options.playlistId) {
+                    PlaylistManager.removeTrackFromPlaylist(options.playlistId, trackId);
+                    UIManager.showMessage(`Removed track from playlist.`);
+                }
+                break;
+            case 'edit-info':
+                UIManager.openEditModal(track);
+                break;
+        }
+    }
 
-        editModal.classList.remove('hidden');
+    function playTrackFromId(trackId, context) {
+        const libraryIndex = playerContext.libraryTracks.findIndex(t => t.id === trackId);
+        if (libraryIndex === -1 || !playerContext.libraryTracks[libraryIndex].objectURL) {
+            UIManager.showMessage("Track is not available for playback.");
+            return;
+        }
+
+        let trackIdQueue = [];
+        let startIndex = 0;
+
+        if (context === 'library' || context === 'recent') {
+            // For both library and home/recent, we play from the full library, sorted alphabetically
+            trackIdQueue = [...playerContext.libraryTracks].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(t => t.id);
+            startIndex = trackIdQueue.findIndex(id => id === trackId);
+        } else {
+            // Fallback for direct play or other contexts
+            trackIdQueue = [trackId];
+            startIndex = 0;
+        }
+
+        PlaybackManager.startPlayback(trackIdQueue, startIndex > -1 ? startIndex : 0);
     }
 
     function saveTrackChanges() {
@@ -976,12 +620,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Persist changes and update UI
-        saveLibraryMetadata();
-        renderHomeGrid();
-        renderLibraryGrid();
+        db.tracks.put(track); // Save to Dexie
+        UIManager.renderHomeGrid();
+        UIManager.renderLibraryGrid();
         QueueManager.renderQueueTable();
         if (playerContext.currentTrackIndex > -1 && playerContext.trackQueue[playerContext.currentTrackIndex].id === trackId) {
-            updatePlaybackBar(track);
+            UIManager.updatePlaybackBar(track);
         }
         editModal.classList.add('hidden');
     }
@@ -1033,10 +677,9 @@ document.addEventListener('DOMContentLoaded', function() {
             objectURL: url,
             coverURL: null
         };
-        playerContext.libraryTracks.push(track);
-        LibraryManager.saveLibraryMetadata();
-        renderHomeGrid(); // Update UI
-        renderLibraryGrid();
+        playerContext.libraryTracks.push(newTrack);
+        UIManager.renderHomeGrid(); // Update UI
+        UIManager.renderLibraryGrid();
         urlModal.classList.add('hidden');
         urlInput.value = '';
         // Do not auto-play
@@ -1045,8 +688,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Profile Picture Handling
     profilePicInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        const createPlaylistBtn = document.getElementById('create-playlist-btn');
-        const sidebarPlaylistsContainer = document.getElementById('sidebar-playlists');
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -1066,21 +707,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Selection Bar Listeners
     if (selectionClearBtn) {
-        selectionClearBtn.addEventListener('click', clearSelection);
+        selectionClearBtn.addEventListener('click', UIManager.clearSelection);
     }
 
     if (selectionRemoveBtn) {
         selectionRemoveBtn.addEventListener('click', async () => {
             const count = playerContext.selectedTrackIds.size;
-            const confirmed = await showConfirmation(
+            const confirmed = await UIManager.showConfirmation(
                 'Remove Tracks',
                 `Are you sure you want to permanently remove ${count} selected track(s) from your library?`
             );
             if (confirmed) {
                 const removalPromises = Array.from(playerContext.selectedTrackIds).map(id => handleRemoveTrack(id));
                 await Promise.all(removalPromises);
-                showMessage(`Removed ${count} track(s).`);
-                clearSelection();
+                UIManager.showMessage(`Removed ${count} track(s).`);
+                UIManager.clearSelection();
             }
         });
     }
@@ -1091,8 +732,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const playlistId = prompt("Enter the ID of the playlist to add tracks to (for now).");
             if (playlistId) {
                 playerContext.selectedTrackIds.forEach(trackId => PlaylistManager.addTrackToPlaylist(playlistId, trackId));
-                showMessage(`Added ${playerContext.selectedTrackIds.size} tracks to the playlist.`);
-                clearSelection();
+                UIManager.showMessage(`Added ${playerContext.selectedTrackIds.size} tracks to the playlist.`);
+                UIManager.clearSelection();
             }
         });
     }
@@ -1100,23 +741,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleTimeUpdate() {
         const { currentTime, duration } = audioPlayer;
         if (!isNaN(duration)) {
-            const pct = (currentTime / duration) * 100;
-            progressFill.style.width = `${pct}%`;
-            progressHead.style.left = `${pct}%`; // Update head position
-            currentTimeEl.textContent = formatTime(currentTime);
-            durationEl.textContent = formatTime(duration);
+            UIManager.updateProgressBarUI(currentTime, duration);
             savePlaybackState(); // Periodically save progress
-            updateLyrics(currentTime); // Sync lyrics
+            UIManager.updateLyrics(currentTime); // Sync lyrics
         }
-    }
-
-    function updateProgressBarUI(currentTime, duration) {
-        if (isNaN(duration) || duration <= 0) return;
-        const pct = (currentTime / duration) * 100;
-        progressFill.style.width = `${pct}%`;
-        progressHead.style.left = `${pct}%`;
-        currentTimeEl.textContent = formatTime(currentTime);
-        durationEl.textContent = formatTime(duration);
     }
     
     // --- Drag and Click to Seek ---
@@ -1137,7 +765,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const pct = position * 100;
         progressFill.style.width = `${pct}%`;
         if(progressHead) progressHead.style.left = `${pct}%`;
-        currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
+        currentTimeEl.textContent = UIManager.formatTime(audioPlayer.currentTime);
     };
 
     progressBarContainer.addEventListener('mousedown', (e) => {
@@ -1233,7 +861,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Sidebar Toggle
-    const sidebar = document.querySelector('.sidebar'); // Already defined
+    const sidebar = document.querySelector('.sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (e) => {
@@ -1252,8 +880,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const searchDropdown = document.getElementById('search-dropdown');
 
-    const sidebarPlaylistsContainer = document.getElementById('sidebar-playlists');
-    sidebarPlaylistsContainer.addEventListener('click', (e) => switchSection('queue-view-section'))
+    sidebarPlaylistsContainer.addEventListener('click', (e) => UIManager.switchSection('playlists-section'))
 
     let highlightedSearchIndex = -1;
 
@@ -1288,7 +915,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         searchDropdown.innerHTML = results.map(({ t, idx }) => {
-            const duration = t.duration ? formatTime(t.duration) : '';
+            const duration = t.duration ? UIManager.formatTime(t.duration) : '';
             const icon = t.isURL ? '<i class="fas fa-globe"></i>' : '<i class="fas fa-music"></i>';
             return `
                 <div class="result-item" data-idx="${idx}" role="option">
@@ -1306,11 +933,11 @@ document.addEventListener('DOMContentLoaded', function() {
             el.addEventListener('click', (e) => {
                 const idx = parseInt(el.dataset.idx, 10);
                 if (!isNaN(idx) && playerContext.trackQueue[idx]?.objectURL) {
-                    loadTrack(idx);
+                    PlaybackManager.loadTrack(idx);
                     searchDropdown.classList.add('hidden');
-                    renderQueueTable();
+                    QueueManager.renderQueueTable();
                 } else {
-                    showMessage('Selected track is not available. Re-open the file.');
+                    UIManager.showMessage('Selected track is not available. Re-open the file.');
                 }
             });
         });
@@ -1398,21 +1025,17 @@ document.addEventListener('DOMContentLoaded', function() {
             case ' ': // Spacebar for Play/Pause
                 event.preventDefault(); // Prevents the page from scrolling down
                 // Call your existing play/pause function
-                if (audioPlayer.paused) {
-                    playTrack();
-                } else {
-                    pauseTrack();
-                }
+                PlaybackManager.togglePlayPause();
                 break;
             
             case 'ArrowRight': // Right Arrow for Next Track
                 event.preventDefault(); 
-                if (nextBtn) nextTrack(); // Assumes you have a nextTrack() function
+                if (nextBtn) PlaybackManager.nextTrack(); // Assumes you have a nextTrack() function
                 break;
 
             case 'ArrowLeft': // Left Arrow for Previous Track
                 event.preventDefault();
-                if (prevBtn) prevTrack(); // Assumes you have a prevTrack() function
+                if (prevBtn) PlaybackManager.prevTrack(); // Assumes you have a prevTrack() function
                 break;
 
             case 'ArrowUp': // Up Arrow for Volume Up
@@ -1444,49 +1067,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Library View Toggle Logic
-    if (libraryGridViewBtn && libraryListViewBtn && libraryGrid) {
-        libraryGridViewBtn.addEventListener('click', () => {
-            libraryGrid.classList.remove('list-view');
-            libraryGridViewBtn.classList.add('active');
-            libraryListViewBtn.classList.remove('active');
-            localStorage.setItem('genesis_library_view', 'grid');
-        });
-
-        libraryListViewBtn.addEventListener('click', () => {
-            libraryGrid.classList.add('list-view');
-            libraryListViewBtn.classList.add('active');
-            libraryGridViewBtn.classList.remove('active');
-            localStorage.setItem('genesis_library_view', 'list');
-        });
-    }
-
     if (libraryPlayAllBtn) {
         libraryPlayAllBtn.addEventListener('click', () => {
             if (playerContext.libraryTracks.length > 0) {
                 PlaybackManager.startPlayback(playerContext.libraryTracks.map(t => t.id), 0);
-                showMessage(`Playing all ${playerContext.libraryTracks.length} tracks from your library.`);
+                UIManager.showMessage(`Playing all ${playerContext.libraryTracks.length} tracks from your library.`);
             }
         });
     }
-
-    // Extended Info Panel Logic
-    if (playbackBarTrackInfo && extendedInfoPanel && closeExtendedPanelBtn && mainContent) {
-        playbackBarTrackInfo.addEventListener('click', () => {
-            if (playerContext.currentTrackIndex > -1) {
-                updateExtendedInfoPanel(playerContext.trackQueue[playerContext.currentTrackIndex]);
-                extendedInfoPanel.classList.add('active');
-                mainContent.classList.add('panel-active');
-            }
-        });
-
-        closeExtendedPanelBtn.addEventListener('click', () => {
-            extendedInfoPanel.classList.remove('active');
-            mainContent.classList.remove('panel-active');
-        });
-    }
-
-}); // close DOMContentLoaded listener
+});
 // --- Functions for other modules ---
 
 /**
@@ -1522,42 +1111,16 @@ export function parseLRC(lrcText) {
  * @param {string} trackId The ID of the track to find.
  * @returns {Promise<object>} A promise that resolves with the track data.
  */
+async function getTrackDetailsFromId(trackId) {
+    // First check in-memory library
+    let track = playerContext.libraryTracks.find(t => t.id === trackId);
+    if (track) return track;
+    // If not found, check the database (for detail views)
+    return await db.tracks.get(trackId);
+}
 
 const startPlayback = PlaybackManager.startPlayback;
 const loadTrack = PlaybackManager.loadTrack;
 
-/**
- * Updates the active lyric line based on the current playback time.
- * @param {number} currentTime The current time of the audio player.
- */
-export function updateLyrics(currentTime) {
-    // Check if playerContext.trackQueue and playerContext.currentTrackIndex are valid
-    if (!playerContext.trackQueue || playerContext.currentTrackIndex < 0 || playerContext.currentTrackIndex >= playerContext.trackQueue.length) return;
-
-    const track = playerContext.trackQueue[playerContext.currentTrackIndex];
-    if (!track || !track.syncedLyrics || track.syncedLyrics.length === 0) return;
-
-    let newLyricIndex = -1;
-    for (let i = track.syncedLyrics.length - 1; i >= 0; i--) {
-        if (currentTime >= track.syncedLyrics[i].time) {
-            newLyricIndex = i;
-            break;
-        }
-    }
-
-    if (newLyricIndex !== currentLyricIndex) {
-        currentLyricIndex = newLyricIndex;
-        const lyricLines = document.querySelectorAll('#lyrics-container .lyric-line');
-        lyricLines.forEach((line, index) => {
-            line.classList.remove('active', 'past', 'upcoming');
-            if (index === currentLyricIndex) {
-                line.classList.add('active');
-                line.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else if (index < currentLyricIndex) {
-                line.classList.add('past');
-            } else {
-                line.classList.add('upcoming');
-            }
-        });
-    }
-}
+window.addEventListener('online', () => console.log('Back online'));
+window.addEventListener('offline', () => console.log('Offline mode'));

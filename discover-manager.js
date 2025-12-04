@@ -14,11 +14,27 @@ let config = {
 export async function init(dependencies) {
     config = { ...config, ...dependencies };
     if (config.discoverContent) {
-        // Load popular tracks on initial view
-        await renderDiscoverGrid('popular');
-
         const searchInput = document.getElementById('discover-search-input');
         const searchBtn = document.getElementById('discover-search-btn');
+
+        // Handle online/offline state changes
+        const updateOnlineStatus = () => {
+            const isOffline = !navigator.onLine;
+            searchInput.disabled = isOffline;
+            searchBtn.disabled = isOffline;
+            if (isOffline) {
+                searchInput.placeholder = "Search is disabled offline";
+            } else {
+                searchInput.placeholder = "Search artists, albums, tracks...";
+            }
+        };
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus(); // Set initial state
+
+        // Load popular tracks on initial view
+        await renderDiscoverGrid('popular');
 
         searchBtn.addEventListener('click', () => renderDiscoverGrid(searchInput.value));
         searchInput.addEventListener('keyup', (e) => {
@@ -28,12 +44,26 @@ export async function init(dependencies) {
 }
 
 async function cacheEnrichedData(track) {
+  // Fetch album art and convert to a blob for offline storage
+  let albumArtBlob = null;
+  if (track.albumArt) {
+    try {
+      const response = await fetch(track.albumArt);
+      if (response.ok) {
+        albumArtBlob = await response.blob();
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch and cache album art for ${track.title}`, error);
+    }
+  }
+
   // Cache the track object
   await db.tracks.put({
     id: track.id.toString(),
     title: track.title,
     artist: track.artist,
     album: track.album,
+    albumArtBlob: albumArtBlob, // Store the blob
     audioUrl: track.audioUrl,
     albumArt: track.albumArt,
     bio: track.bio,
@@ -57,25 +87,26 @@ async function cacheEnrichedData(track) {
 }
 
 async function fetchDiscoverTracks(query = 'popular') {
+    // Offline-first strategy
     try {
+        if (!navigator.onLine) {
+            throw new Error("Offline mode detected. Searching cache.");
+        }
         const response = await fetch(`/discover?q=${encodeURIComponent(query)}`);
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
         }
         const enrichedTracks = await response.json();
 
-        // Cache each enriched track for offline use
-        if (enrichedTracks.length > 0) {
-            for (const track of enrichedTracks) {
-                await cacheEnrichedData(track);
-            }
-        }
+        // Asynchronously cache each enriched track for future offline use
+        enrichedTracks.forEach(track => cacheEnrichedData(track));
+
         return enrichedTracks;
     } catch (error) {
-        console.error('Failed to fetch discover tracks:', error);
+        console.warn('Network fetch failed:', error.message);
         config.showMessage('Offline. Searching your local cache...');
 
-        // Fallback: If offline, search the local cache
+        // Fallback: If offline or server fails, search the local cache
         const qLower = query.toLowerCase();
         const cached = await db.tracks.filter(track => 
             track.title.toLowerCase().includes(qLower) || 
@@ -101,7 +132,9 @@ async function renderDiscoverGrid(query) {
 
     config.discoverContent.innerHTML = tracks.map(track => {
         // Jamendo API provides different image sizes, let's pick a medium one
-        const coverURL = track.albumArt ? track.albumArt.replace('1.200x1200', '1.300x300') : 'https://via.placeholder.com/300';
+        const coverURL = track.albumArtBlob
+            ? URL.createObjectURL(track.albumArtBlob)
+            : (track.albumArt ? track.albumArt.replace('1.200x1200', '1.300x300') : './assets/default-art.png');
         const tagsHTML = track.tags && track.tags.length > 0
             ? `<div class="card-tags">${track.tags.slice(0, 2).map(tag => `<span>${tag}</span>`).join('')}</div>`
             : '';
