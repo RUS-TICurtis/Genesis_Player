@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Genesis Player</title>
   <!-- Using CDN for icons to ensure they load -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="assets/fontawesome/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
   <style>
     /* Drag and Drop Indicator Styles */
@@ -13,13 +14,18 @@
       border-top: 2px solid var(--primary-color);
       box-shadow: 0 -5px 10px -5px var(--primary-color-translucent);
     }
+
     .queue-item.drop-target-bottom {
       border-bottom: 2px solid var(--primary-color);
       box-shadow: 0 5px 10px -5px var(--primary-color-translucent);
     }
-    .queue-item.dragging { opacity: 0.5; }
+
+    .queue-item.dragging {
+      opacity: 0.5;
+    }
   </style>
 </head>
+
 <body>
   <div class="music-player-container">
     <!-- Sidebar -->
@@ -32,16 +38,18 @@
       <div class="menu">
         <div class="menu-item active" data-target="home-section"><i class="fas fa-home"></i><span>Home</span></div>
         <div class="menu-item" data-target="library-section"><i class="fas fa-music"></i><span>Library</span></div>
-        <div class="menu-item" data-target="queue-view-section"><i class="fas fa-list-ol"></i><span>Play Queue</span></div>
+        <div class="menu-item" data-target="queue-view-section"><i class="fas fa-list-ol"></i><span>Play Queue</span>
+        </div>
         <div class="menu-item" data-target="discover-section"><i class="fas fa-compass"></i><span>Discover</span></div>
-        <div class="menu-item" data-target="playlists-section"><i class="fas fa-play-circle"></i><span>Playlists</span></div>
+        <div class="menu-item" data-target="playlists-section"><i class="fas fa-play-circle"></i><span>Playlists</span>
+        </div>
         <div class="menu-item" data-target="artists-section"><i class="fas fa-users"></i><span>Artists</span></div>
         <div class="menu-item" data-target="albums-section"><i class="fas fa-compact-disc"></i><span>Albums</span></div>
       </div>
 
       <div class="playlist-section">
         <div class="section-header"><span>Library & Files</span></div>
-        
+
         <!-- Open Menu -->
         <div class="open-menu-container">
           <button id="open-menu-btn" class="open-btn">
@@ -50,16 +58,22 @@
             <i class="fas fa-chevron-down ml-auto"></i>
           </button>
           <div id="open-menu-dropdown" class="open-dropdown hidden">
-            <div id="open-files-option" class="dropdown-item"><i class="fas fa-file-audio"></i><span>Open File(s)</span></div>
-            <div id="open-folder-option" class="dropdown-item"><i class="fas fa-folder"></i><span>Open Folder</span></div>
+            <div id="open-files-option" class="dropdown-item"><i class="fas fa-file-audio"></i><span>Open File(s)</span>
+            </div>
+            <div id="open-folder-option" class="dropdown-item"><i class="fas fa-folder"></i><span>Open Folder</span>
+            </div>
             <div id="open-url-option" class="dropdown-item"><i class="fas fa-globe"></i><span>Open URL</span></div>
           </div>
         </div>
-        
+
         <!-- Hidden Inputs -->
-        <input type="file" id="file-input" accept="audio/*,.flac,.opus,.wma,.ape,.dsf,.dsd,.mpc,.wv,.tta,.dff,.aiff,.aif,.ac3,.eac3,.dts" multiple hidden />
-        <input type="file" id="folder-input" accept="audio/*,.flac,.opus,.wma,.ape,.dsf,.dsd,.mpc,.wv,.tta,.dff,.aiff,.aif,.ac3,.eac3,.dts" webkitdirectory directory hidden />
-        
+        <input type="file" id="file-input"
+          accept="audio/*,.flac,.opus,.wma,.ape,.dsf,.dsd,.mpc,.wv,.tta,.dff,.aiff,.aif,.ac3,.eac3,.dts" multiple
+          hidden />
+        <input type="file" id="folder-input"
+          accept="audio/*,.flac,.opus,.wma,.ape,.dsf,.dsd,.mpc,.wv,.tta,.dff,.aiff,.aif,.ac3,.eac3,.dts" webkitdirectory
+          directory hidden />
+
         <div class="playlist-list" style="margin-top: 20px;">
           <div class="section-header"><span>Your Playlists</span></div>
           <div id="sidebar-playlists" class="sidebar-playlists">
@@ -94,14 +108,15 @@
         <div id="search-dropdown" class="search-dropdown hidden" role="listbox" aria-label="Search results"></div>
         <div class="user-profile">
           <label for="profile-pic-input" class="profile-pic-wrapper" style="cursor: pointer;">
-            <img id="profile-pic" src="profile-default.jpg" alt="Profile" style="width: 100%; height: 100%; object-fit: cover;" />
+            <img id="profile-pic" src="profile-default.jpg" alt="Profile"
+              style="width: 100%; height: 100%; object-fit: cover;" />
             <input type="file" id="profile-pic-input" accept="image/*" hidden />
           </label>
         </div>
       </div>
 
       <!-- Content Sections -->
-      
+
       <!-- 1. HOME SECTION (The Player Dashboard) -->
       <div id="home-section" class="main-section home-layout">
         <div class="home-header">
@@ -121,8 +136,10 @@
           <div class="header-actions">
             <button id="library-play-all-btn" class="btn-primary"><i class="fas fa-play"></i> Play All</button>
             <div class="view-toggle-buttons">
-              <button id="library-grid-view-btn" class="view-toggle-btn active" title="Grid View"><i class="fas fa-th-large"></i></button>
-              <button id="library-list-view-btn" class="view-toggle-btn" title="List View"><i class="fas fa-list"></i></button>
+              <button id="library-grid-view-btn" class="view-toggle-btn active" title="Grid View"><i
+                  class="fas fa-th-large"></i></button>
+              <button id="library-list-view-btn" class="view-toggle-btn" title="List View"><i
+                  class="fas fa-list"></i></button>
             </div>
           </div>
         </div>
@@ -138,7 +155,8 @@
           <h2>Discover</h2>
           <div class="discover-search-container">
             <input type="text" id="discover-search-input" placeholder="Search artists, albums, tracks...">
-            <button id="discover-search-btn" class="btn-primary" title="Search online"><i class="fas fa-search"></i></button>
+            <button id="discover-search-btn" class="btn-primary" title="Search online"><i
+                class="fas fa-search"></i></button>
           </div>
         </div>
         <div id="discover-grid" class="discover-content media-grid">
@@ -159,7 +177,8 @@
           <div class="card-footer">
             <h5 class="discover-track-title">Track Title</h5>
             <button class="control-btn small play-stream-btn" title="Play Stream"><i class="fas fa-play"></i></button>
-            <button class="control-btn small download-track-btn" title="Add to Library"><i class="fas fa-download"></i></button>
+            <button class="control-btn small download-track-btn" title="Add to Library"><i
+                class="fas fa-download"></i></button>
           </div>
         </div>
       </template>
@@ -167,7 +186,7 @@
       <!-- 3. PLAYLISTS SECTION -->
       <div id="playlists-section" class="main-section hidden">
         <div class="playlists-header">
-          
+
           <h2>Playlists</h2>
           <button id="create-playlist-btn" class="btn-primary" title="Create new playlist">
             <i class="fas fa-plus"></i> New Playlist
@@ -180,7 +199,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 4. ARTISTS SECTION -->
       <div id="artists-section" class="main-section hidden">
         <div class="artists-header">
@@ -190,7 +209,7 @@
           <!-- Artist cards will be rendered here -->
         </div>
       </div>
-      
+
       <!-- 5. ALBUMS SECTION -->
       <div id="albums-section" class="main-section hidden">
         <div class="albums-header">
@@ -207,9 +226,13 @@
           <h2 id="queue-header-title">Play Queue</h2>
           <div class="queue-view-actions">
             <button id="queue-add-files-btn" class="btn-secondary"><i class="fas fa-plus"></i> Add File(s)</button>
-            <button id="queue-save-playlist-btn" class="btn-primary" title="Save current queue as a new playlist"><i class="fas fa-save"></i> Save as Playlist</button>
+            <button id="queue-save-playlist-btn" class="btn-primary" title="Save current queue as a new playlist"><i
+                class="fas fa-save"></i> Save as Playlist</button>
             <button id="queue-clear-btn" class="btn-danger"><i class="fas fa-trash"></i> Clear</button>
           </div>
+        </div>
+        <div class="track-list-header">
+          <span>#</span><span>Title</span><span>Artist</span><span>Album</span><span>Duration</span><span></span>
         </div>
         <div class="queue-list-container" style="background: transparent; margin: 0; padding: 0 30px 30px;">
           <div id="queue-list" class="queue-list">
@@ -220,13 +243,20 @@
 
       <!-- This view is shown when a playlist is clicked -->
       <div id="playlist-detail-view" class="main-section hidden"></div>
-      
+
       <!-- New detail views for albums and artists -->
       <div id="album-detail-view" class="main-section hidden"></div>
       <div id="artist-detail-view" class="main-section hidden"></div>
 
       <!-- Placeholder for Settings -->
-      <div id="settings-section" class="main-section hidden"><div class="discover-header"><h2>Settings</h2></div><div class="empty-state"><p>Settings page coming soon.</p></div></div>
+      <div id="settings-section" class="main-section hidden">
+        <div class="discover-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="empty-state">
+          <p>Settings page coming soon.</p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -236,21 +266,24 @@
       <span id="selection-count">0</span> items selected
     </div>
     <div class="selection-actions">
-      <button id="selection-add-to-playlist-btn" class="btn-secondary"><i class="fas fa-plus"></i> Add to Playlist</button>
+      <button id="selection-add-to-playlist-btn" class="btn-secondary"><i class="fas fa-plus"></i> Add to
+        Playlist</button>
       <button id="selection-remove-btn" class="btn-danger"><i class="fas fa-trash"></i> Remove</button>
     </div>
-    <button id="selection-clear-btn" class="control-btn small" title="Clear selection"><i class="fas fa-times"></i></button>
+    <button id="selection-clear-btn" class="control-btn small" title="Clear selection"><i
+        class="fas fa-times"></i></button>
   </div>
 
   <!-- Extended Info Panel (Right Sidebar) -->
   <div id="extended-info-panel" class="extended-info-panel">
     <div class="panel-header">
       <h3>Now Playing</h3>
-      <button id="close-extended-panel-btn" class="control-btn small" title="Close"><i class="fas fa-times"></i></button>
+      <button id="close-extended-panel-btn" class="control-btn small" title="Close"><i
+          class="fas fa-times"></i></button>
     </div>
     <div class="panel-content">
       <div id="extended-info-art" class="extended-album-art">
-        <img src="https://via.placeholder.com/300" alt="Album Art">
+        <img src="logo.png" alt="Album Art">
       </div>
       <div id="extended-info-details" class="extended-track-details">
         <h3 id="extended-info-title">Track Title</h3>
@@ -361,7 +394,7 @@
       <div class="playback-album-art">
         <img id="album-art-img" class="hidden" alt="Album Art" />
         <div id="album-art-placeholder" class="placeholder-icon">
-            <i class="fas fa-music"></i>
+          <i class="fas fa-music"></i>
         </div>
       </div>
       <div class="playback-song-details">
@@ -383,7 +416,8 @@
       <div class="controls">
         <button class="control-btn" id="shuffle-btn" title="Shuffle"><i class="fas fa-random"></i></button>
         <button class="control-btn" id="prev-btn" title="Previous"><i class="fas fa-step-backward"></i></button>
-        <button class="control-btn play-btn" id="play-btn" title="Play/Pause"><i class="fas fa-play" id="play-icon"></i></button>
+        <button class="control-btn play-btn" id="play-btn" title="Play/Pause"><i class="fas fa-play"
+            id="play-icon"></i></button>
         <button class="control-btn" id="next-btn" title="Next"><i class="fas fa-step-forward"></i></button>
         <button class="control-btn" id="repeat-btn" title="Repeat"><i class="fas fa-redo"></i></button>
       </div>
@@ -391,23 +425,27 @@
 
     <!-- Right Side: Volume & Other Controls -->
     <div class="playback-extra-controls">
-        <div class="volume-control-container">
-            <button class="control-btn" id="volume-btn" title="Volume"><i class="fas fa-volume-up" id="volume-icon"></i></button>
-            <div class="volume-control-popup" id="volume-popup">
-                <button class="control-btn small" id="mute-btn" title="Mute"><i class="fas fa-volume-up"></i></button>                
-                <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7" />
-                <span id="volume-percentage">70</span>
-            </div>
+      <div class="volume-control-container">
+        <button class="control-btn" id="volume-btn" title="Volume"><i class="fas fa-volume-up"
+            id="volume-icon"></i></button>
+        <div class="volume-control-popup" id="volume-popup">
+          <button class="control-btn small" id="mute-btn" title="Mute"><i class="fas fa-volume-up"></i></button>
+          <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7" />
+          <span id="volume-percentage">70</span>
         </div>
+      </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.10/dist/music-metadata-browser.min.js"></script>
+  <!-- <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.11/dist/music-metadata-browser.min.js"></script> -->
   <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.10/dist/music-metadata-browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+
   <script type="module" src="script.js"></script>
   <script>
-    
+
   </script>
 </body>
+
 </html>
