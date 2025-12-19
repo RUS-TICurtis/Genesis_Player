@@ -9,6 +9,7 @@ import * as AlbumManager from './album-manager.js';
 import * as ArtistManager from './artist-manager.js';
 import * as DiscoverManager from './discover-manager.js';
 import * as ContextMenuManager from './context-menu-manager.js';
+import { refreshLyrics, openManualLyricsSearch } from './lyrics-manager.js';
 
 document.addEventListener('DOMContentLoaded', async function () {
 
@@ -353,14 +354,26 @@ document.addEventListener('DOMContentLoaded', async function () {
             extendedInfoPanel.classList.remove('active');
             mainContent.classList.remove('panel-active');
         });
+
+        // Lyrics Controls
+        const refreshLyricsBtn = document.getElementById('lyrics-refresh-btn');
+        const searchLyricsBtn = document.getElementById('lyrics-search-btn');
+        if (refreshLyricsBtn) refreshLyricsBtn.addEventListener('click', refreshLyrics);
+        if (searchLyricsBtn) searchLyricsBtn.addEventListener('click', openManualLyricsSearch);
     }
 
     // Library View Toggles
     const gridViewBtn = document.getElementById('library-grid-view-btn');
     const listViewBtn = document.getElementById('library-list-view-btn');
     if (gridViewBtn && listViewBtn) {
-        gridViewBtn.addEventListener('click', () => UI.switchLibraryView('grid'));
-        listViewBtn.addEventListener('click', () => UI.switchLibraryView('list'));
+        gridViewBtn.addEventListener('click', () => {
+            UI.switchLibraryView('grid');
+            LibraryManager.renderLibraryGrid();
+        });
+        listViewBtn.addEventListener('click', () => {
+            UI.switchLibraryView('list');
+            LibraryManager.renderLibraryGrid();
+        });
     }
 
     // Play All Library

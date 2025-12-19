@@ -2,6 +2,7 @@ import { playerContext } from './state.js';
 import { formatTime } from './utils.js';
 import { renderQueueTable } from './queue-manager.js';
 import { showMessage, elements } from './ui-manager.js';
+import { fetchLyricsForTrack, renderLyrics, syncLyrics, resetLyricsState } from './lyrics-manager.js';
 
 const PLAYBACK_STATE_KEY = 'genesis_playback_state';
 let isDragging = false;
@@ -13,6 +14,7 @@ function getProgressHead() { return document.getElementById('progress-head'); }
 function getCurrentTimeEl() { return document.getElementById('current-time'); }
 function getDurationEl() { return document.getElementById('duration'); }
 function getVolumeSlider() { return document.getElementById('volume-slider'); }
+// ... (keep getters)
 function getVolumePercentage() { return document.getElementById('volume-percentage'); }
 function getVolumeIcon() { return document.getElementById('volume-icon'); }
 function getMuteBtn() { return document.getElementById('mute-btn'); }
@@ -119,25 +121,15 @@ export function updatePlaybackBar(track) {
     }
 
     if (extendedInfoPanel && extendedInfoPanel.classList.contains('active')) {
-        updateExtendedInfoPanel(track); // Assuming global or imported. We should import it?
-        // Let's implement local logic or import it.
-        // Importing from ui-manager is cleaner.
+        updateExtendedInfoPanel(track);
     }
 }
-
-// Re-implementing updateExtendedInfoPanel here or import?
-// It was in ui-manager plan but I didn't export it clearly or maybe I did?
-// I'll stick to local implementation or import if I exported it.
-// Checking ui-manager... I didn't include updateExtendedInfoPanel in ui-manager.js content!
-// I'll add it here.
 
 function updateExtendedInfoPanel(track) {
     if (!track) return;
     const extendedInfoArt = document.getElementById('extended-info-art');
     const extendedInfoTitle = document.getElementById('extended-info-title');
     const extendedInfoArtist = document.getElementById('extended-info-artist');
-    const lyricsContainer = document.getElementById('lyrics-container');
-    let currentLyricIndex = -1;
 
     if (extendedInfoArt) {
         extendedInfoArt.innerHTML = track.coverURL
@@ -147,17 +139,8 @@ function updateExtendedInfoPanel(track) {
     if (extendedInfoTitle) extendedInfoTitle.textContent = track.title || 'Unknown Title';
     if (extendedInfoArtist) extendedInfoArtist.textContent = track.artist || 'Unknown Artist';
 
-    if (lyricsContainer) {
-        if (track.syncedLyrics && track.syncedLyrics.length > 0) {
-            lyricsContainer.innerHTML = track.syncedLyrics.map((line, index) =>
-                `<p class="lyric-line" data-index="${index}">${line.text || '&nbsp;'}</p>`
-            ).join('');
-        } else if (track.lyrics) {
-            lyricsContainer.innerHTML = track.lyrics.replace(/\n/g, '<br>');
-        } else {
-            lyricsContainer.innerHTML = '<p class="lyric-line" style="font-style: italic;">No lyrics found for this track.</p>';
-        }
-    }
+    // Delegate lyrics rendering to lyrics-manager
+    renderLyrics(track);
 }
 
 export function updateProgressBarUI(currentTime, duration) {
@@ -174,38 +157,6 @@ export function updateProgressBarUI(currentTime, duration) {
     if (durEl) durEl.textContent = formatTime(duration);
 }
 
-// ... Additional helper for lyrics syncing ...
-let currentLyricIndex = -1;
-function updateLyrics(currentTime) {
-    if (!playerContext.trackQueue || playerContext.currentTrackIndex < 0) return;
-    const track = playerContext.trackQueue[playerContext.currentTrackIndex];
-    if (!track || !track.syncedLyrics || track.syncedLyrics.length === 0) return;
-
-    let newLyricIndex = -1;
-    for (let i = track.syncedLyrics.length - 1; i >= 0; i--) {
-        if (currentTime >= track.syncedLyrics[i].time) {
-            newLyricIndex = i;
-            break;
-        }
-    }
-
-    if (newLyricIndex !== currentLyricIndex) {
-        currentLyricIndex = newLyricIndex;
-        const lyricLines = document.querySelectorAll('#lyrics-container .lyric-line');
-        lyricLines.forEach((line, index) => {
-            line.classList.remove('active', 'past', 'upcoming');
-            if (index === currentLyricIndex) {
-                line.classList.add('active');
-                line.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else if (index < currentLyricIndex) {
-                line.classList.add('past');
-            } else {
-                line.classList.add('upcoming');
-            }
-        });
-    }
-}
-
 export function getTimeHandler() {
     return () => {
         const audioPlayer = getAudioPlayer();
@@ -213,7 +164,7 @@ export function getTimeHandler() {
         if (!isNaN(duration)) {
             updateProgressBarUI(currentTime, duration);
             savePlaybackState();
-            updateLyrics(currentTime);
+            syncLyrics(currentTime); // Delegate sync logic
         }
     };
 }
@@ -229,12 +180,20 @@ export function loadTrack(index, autoPlay = true) {
     renderQueueTable();
     savePlaybackState();
 
+    // Reset lyrics state on track change
+    resetLyricsState();
+
     if (autoPlay) {
         const canPlayHandler = () => {
             playTrack();
             audioPlayer.removeEventListener('canplay', canPlayHandler);
         };
         audioPlayer.addEventListener('canplay', canPlayHandler);
+    }
+
+    // Fetch lyrics if missing
+    if (!track.lyrics && !track.syncedLyrics && !track.isLyricsFetching) {
+        fetchLyricsForTrack(track);
     }
 }
 
@@ -381,8 +340,9 @@ export function removeFromQueue(index) {
         if (playerContext.trackQueue.length > 0) {
             let newIndex = index;
             if (newIndex >= playerContext.trackQueue.length) newIndex = 0;
-            loadTrack(newIndex, false);
+            loadTrack(newIndex, true); // Immediately play next
         } else {
+            pauseTrack(); // Stop playback
             playerContext.currentTrackIndex = -1;
             updatePlaybackBar(null);
         }
@@ -390,7 +350,7 @@ export function removeFromQueue(index) {
     renderQueueTable();
 }
 
-// Drag seeking logic can also be exported or initialized here
+// Drag seeking logic
 export function initProgressBarListeners() {
     const progressBarContainer = document.getElementById('progress-container');
     const audioPlayer = getAudioPlayer();

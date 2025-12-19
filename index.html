@@ -157,6 +157,8 @@
             <input type="text" id="discover-search-input" placeholder="Search artists, albums, tracks...">
             <button id="discover-search-btn" class="btn-primary" title="Search online"><i
                 class="fas fa-search"></i></button>
+            <button id="discover-refresh-btn" class="btn-secondary" title="Refresh / Surprise Me"><i
+                class="fas fa-sync-alt"></i></button>
           </div>
         </div>
         <div id="discover-grid" class="discover-content media-grid">
@@ -290,7 +292,15 @@
         <p id="extended-info-artist">Artist Name</p>
       </div>
       <div class="lyrics-section">
-        <h4><i class="fas fa-microphone-alt"></i> Lyrics</h4>
+        <div class="lyrics-header">
+          <h4><i class="fas fa-microphone-alt"></i> Lyrics</h4>
+          <div class="lyrics-controls">
+            <button id="lyrics-refresh-btn" class="lyrics-control-btn" title="Fetch next most accurate lyrics"><i
+                class="fas fa-sync-alt"></i></button>
+            <button id="lyrics-search-btn" class="lyrics-control-btn" title="Manual Search"><i
+                class="fas fa-search"></i></button>
+          </div>
+        </div>
         <div id="lyrics-container" class="lyrics-container">
           <p class="lyric-line upcoming">Waiting for you to tell me I'm okay</p>
           <p class="lyric-line active">I feel like I'm at a standstill</p>

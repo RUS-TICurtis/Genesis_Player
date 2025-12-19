@@ -29,22 +29,16 @@ export function renderQueueTable() {
         const duration = formatTime(track.duration);
         const activeClass = isPlaying ? 'active' : '';
 
-        let imgTag = `<div class="placeholder-icon"><i class="fas fa-music"></i></div>`;
-        if (track.coverURL) {
-            imgTag = `<img src="${track.coverURL}" alt="Art">`;
-        }
-
         return `
-        <div class="queue-item ${activeClass}" draggable="true" data-index="${index}">
-            <div class="queue-item-art">${imgTag}</div>
-            <div class="queue-item-details">
-                <span class="col-title" style="font-weight:600; ${isPlaying ? 'color:var(--primary-color);' : ''}">${track.title}</span>
-                <span class="col-artist" style="font-size:12px; color:var(--text-color);">${track.artist || 'Unknown'}</span>
-            </div>
-            <div class="col-duration">${duration}</div>
-            <div class="col-actions">
-                <button class="control-btn small remove-queue-btn" title="Remove from Queue"><i class="fas fa-times"></i></button>
-            </div>
+        <div class="track-list-row queue-item ${activeClass}" draggable="true" data-index="${index}">
+            <input type="checkbox" class="track-select-checkbox" disabled>
+            <button class="control-btn small row-play-btn" title="Play"><i class="fas fa-${isPlaying ? 'pause' : 'play'}"></i></button>
+            <span class="track-title" style="${isPlaying ? 'color:var(--primary-color); font-weight:600;' : ''}">${track.title}</span>
+            <span class="track-artist">${track.artist || 'Unknown'}</span>
+            <span class="track-album">${track.album || 'Unknown album'}</span>
+            <span class="track-year">${track.year || ''}</span>
+            <span class="track-genre">${track.genre || 'Unknown genre'}</span>
+            <span class="track-duration">${duration}</span>
         </div>
         `;
     }).join('');
@@ -54,14 +48,17 @@ export function renderQueueTable() {
         const index = parseInt(item.dataset.index);
 
         item.addEventListener('click', (e) => {
-            if (e.target.closest('.remove-queue-btn')) return;
+            if (e.target.closest('.row-play-btn') || e.target.type === 'checkbox') return;
             if (actions.onPlay) actions.onPlay(index);
         });
 
-        item.querySelector('.remove-queue-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (actions.onRemove) actions.onRemove(index);
-        });
+        const playBtn = item.querySelector('.row-play-btn');
+        if (playBtn) {
+            playBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (actions.onPlay) actions.onPlay(index);
+            });
+        }
     });
 
     const activeItem = queueList.querySelector('.queue-item.active');

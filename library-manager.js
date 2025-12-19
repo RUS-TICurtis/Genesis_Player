@@ -83,6 +83,21 @@ export async function handleFiles(fileList, options = {}) {
             try {
                 const metadata = await extractMetadata(file);
                 if (metadata) {
+                    // Fetch genre from API if missing or generic
+                    if (!metadata.genre || metadata.genre === 'Unknown Genre') {
+                        try {
+                            const genreRes = await fetch(`/api/genre?title=${encodeURIComponent(metadata.title)}&artist=${encodeURIComponent(metadata.artist)}`);
+                            if (genreRes.ok) {
+                                const genreData = await genreRes.json();
+                                if (genreData.genre && genreData.genre !== 'Unknown Genre') {
+                                    metadata.genre = genreData.genre;
+                                }
+                            }
+                        } catch (apiErr) {
+                            console.warn("Failed to fetch genre from API", apiErr);
+                        }
+                    }
+
                     detailedTracks.push({
                         ...metadata,
                         audioBlob: file
@@ -174,6 +189,8 @@ export function renderHomeGrid() {
 export function renderLibraryGrid() {
     const libraryGrid = document.getElementById('library-grid');
     if (!libraryGrid) return;
+
+    const isListView = libraryGrid.classList.contains('list-view');
     const sortedTracks = [...playerContext.libraryTracks].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 
     if (sortedTracks.length === 0) {
@@ -181,8 +198,45 @@ export function renderLibraryGrid() {
         return;
     }
 
-    libraryGrid.innerHTML = sortedTracks.map(track => createCardHTML(track)).join('');
-    attachGridListeners(libraryGrid);
+    if (isListView) {
+        // Render List View (Rows)
+        libraryGrid.innerHTML = `
+            <div class="track-list-header">
+                <span><input type="checkbox" id="select-all-library" title="Select All"></span>
+                <span>#</span>
+                <span>Title</span>
+                <span>Artist</span>
+                <span>Album</span>
+                <span>Year</span>
+                <span>Genre</span>
+                <span>Duration</span>
+            </div>
+            <div id="library-list-rows"></div>
+        `;
+
+        const rowsContainer = document.getElementById('library-list-rows');
+        renderDetailTrackList(sortedTracks.map(t => t.id), rowsContainer);
+
+        // Handle select all
+        setTimeout(() => {
+            const selectAll = document.getElementById('select-all-library');
+            if (selectAll) {
+                selectAll.addEventListener('change', (e) => {
+                    const checkboxes = rowsContainer.querySelectorAll('.track-select-checkbox');
+                    checkboxes.forEach(cb => {
+                        if (cb.checked !== e.target.checked) {
+                            cb.checked = e.target.checked;
+                            cb.dispatchEvent(new Event('change'));
+                        }
+                    });
+                });
+            }
+        }, 0);
+    } else {
+        // Render Grid View (Cards)
+        libraryGrid.innerHTML = sortedTracks.map(track => createCardHTML(track)).join('');
+        attachGridListeners(libraryGrid);
+    }
 }
 
 function createCardHTML(track) {
@@ -261,28 +315,25 @@ export async function renderDetailTrackList(trackIds, container, options = {}) {
             const row = document.createElement('div');
             row.className = 'track-list-row';
             row.dataset.id = trackId;
-            let secondaryInfo = options.showAlbum ? trackData.album || 'N/A' : trackData.artist || 'Unknown Artist';
 
             row.innerHTML = `
-                <button class="control-btn small row-play-btn" title="Play"><i class="fas fa-play"></i></button>
                 <input type="checkbox" class="track-select-checkbox" data-id="${trackId}">
+                <button class="control-btn small row-play-btn" title="Play"><i class="fas fa-play"></i></button>
                 <span class="track-title">${trackData.title || 'Unknown Title'}</span>
-                <span class="track-album">${secondaryInfo}</span>
+                <span class="track-artist">${trackData.artist || 'Unknown artist'}</span>
+                <span class="track-album">${trackData.album || 'Unknown album'}</span>
+                <span class="track-year">${trackData.year || ''}</span>
+                <span class="track-genre">${trackData.genre || 'Unknown genre'}</span>
                 <span class="track-duration">${formatTime(trackData.duration)}</span>
-                <button class="control-btn small track-action-btn" title="More options"><i class="fas fa-ellipsis-v"></i></button>
             `;
 
             row.addEventListener('click', e => {
-                if (e.target.closest('.track-action-btn') || e.target.closest('.row-play-btn') || e.target.type === 'checkbox') return;
+                if (e.target.closest('.row-play-btn') || e.target.type === 'checkbox') return;
                 if (startPlaybackFn) startPlaybackFn([trackId]);
             });
             row.querySelector('.row-play-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (startPlaybackFn) startPlaybackFn([trackId]);
-            });
-            row.querySelector('.track-action-btn').addEventListener('click', e => {
-                e.stopPropagation();
-                if (renderTrackContextMenuFn) renderTrackContextMenuFn(trackId, e.currentTarget, { isFromLibrary: true, ...options });
             });
             row.querySelector('.track-select-checkbox').addEventListener('change', (e) => {
                 toggleTrackSelection(trackId);

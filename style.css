@@ -39,6 +39,45 @@ body.dark-theme {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* --- Global Scrollbar Styling (Auto-hide) --- */
+/* WebKit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+    /* Track always transparent */
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    /* Hidden by default */
+    border-radius: 4px;
+}
+
+/* Show thumb when hovering over the scrollable area */
+*:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(128, 128, 128, 0.5);
+    /* Semi-transparent grey */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(128, 128, 128, 0.8);
+    /* Darker on grab */
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+*:hover {
+    scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
+}
+
 body {
     background-color: var(--light-color);
     color: var(--dark-color);
@@ -117,6 +156,7 @@ body {
     background-color: rgba(108, 92, 231, 0.1);
     color: var(--primary-color);
 }
+
 
 .playlist-section {
     padding: 0 20px;
@@ -1071,27 +1111,9 @@ body.dark-theme .open-btn {
     color: var(--dark-color);
 }
 
-.queue-header,
-.queue-item {
-    display: grid;
-    grid-template-columns: 60px 1fr auto 80px 40px;
-    /* Art, Details, Duration, Actions */
-    gap: 10px;
-    align-items: center;
-    padding: 12px 15px;
-    font-size: 14px;
-}
-
-.queue-header {
-    font-weight: bold;
-    color: var(--text-color);
-    border-bottom: 1px solid var(--text-light);
-}
 
 .queue-item {
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.2s;
+    /* Inherits from .track-list-row */
     position: relative;
 }
 
@@ -1101,7 +1123,11 @@ body.dark-theme .open-btn {
 
 .queue-item.active {
     background-color: rgba(108, 92, 231, 0.1);
+}
+
+.queue-item.active .track-title {
     color: var(--primary-color);
+    font-weight: 600;
 }
 
 .queue-item.dragging {
@@ -1109,43 +1135,10 @@ body.dark-theme .open-btn {
 }
 
 .queue-item.drag-over {
-    /* Add a visual indicator for the drop target */
     border-top: 2px solid var(--primary-color);
     background-color: rgba(108, 92, 231, 0.05);
 }
 
-.queue-item.active .col-title {
-    color: var(--primary-color);
-}
-
-.queue-item-art {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.queue-item-art img,
-.queue-item-art .placeholder-icon {
-    width: 100%;
-    height: 100%;
-}
-
-.queue-item-details {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    /* Important for flex truncation */
-}
-
-.queue-item .local-file-tag {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background-color: var(--text-light);
-    color: var(--text-color);
-}
 
 /* Empty State */
 .empty-state {
@@ -1468,42 +1461,7 @@ input:checked+.slider:before {
 .home-content-grid.list-view {
     display: flex;
     flex-direction: column;
-    grid-template-columns: 1fr;
-    /* Override grid layout */
-}
-
-.home-content-grid.list-view .recent-media-card {
-    display: grid;
-    grid-template-columns: 50px 1fr auto 40px;
-    align-items: center;
-    padding: 10px;
-    gap: 15px;
-    flex-direction: row;
-    background-color: var(--surface-color);
-    margin-bottom: 5px;
-}
-
-.home-content-grid.list-view .recent-media-card:hover {
-    background-color: var(--light-color);
-}
-
-.home-content-grid.list-view .recent-media-card .album-art {
-    width: 50px;
-    height: 50px;
-    margin-bottom: 0;
-}
-
-.home-content-grid.list-view .recent-media-card .card-footer {
-    grid-column: 2 / 3;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-}
-
-.home-content-grid.list-view .recent-media-card h5 {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--dark-color);
+    width: 100%;
 }
 
 .btn-primary {
@@ -1562,13 +1520,13 @@ input:checked+.slider:before {
 .track-list-header,
 .track-list-row {
     display: grid;
-    /* Columns: Play Btn | Checkbox | # | Title | Secondary Info | Duration | Actions */
-    grid-template-columns: 40px 30px 7fr 5fr 3fr 100px 40px;
+    /* Columns: Checkbox | Play | Title | Artist | Album | Year | Genre | Duration */
+    grid-template-columns: 30px 40px 3fr 2fr 2fr 60px 1.5fr 80px;
     align-items: center;
-    padding: 12px 15px;
-    gap: 15px;
-    border-radius: 8px;
-    font-size: 0.95em;
+    padding: 10px 15px;
+    gap: 12px;
+    border-radius: 4px;
+    font-size: 0.9em;
 }
 
 .track-list-header {
@@ -1582,10 +1540,17 @@ input:checked+.slider:before {
 
 .track-list-row {
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, box-shadow 0.2s;
     background-color: var(--surface-color);
-    /* Match the sidebar */
-    margin-bottom: 5px;
+    margin-bottom: 2px;
+}
+
+.track-list-row:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+body.dark-theme .track-list-row:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
 }
 
 .track-list-row.selected {
@@ -1595,22 +1560,37 @@ input:checked+.slider:before {
 
 .track-list-row:hover {
     background-color: var(--light-color);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.track-list-row .track-album {
+.track-list-row .track-artist,
+.track-list-row .track-album,
+.track-list-row .track-year,
+.track-list-row .track-genre {
     color: var(--text-color);
     font-size: 0.9em;
 }
 
-.track-list-row .track-num {
-    color: var(--text-color);
-    text-align: center;
+.track-list-row .track-year {
+    color: var(--text-light);
+    /* Or a specific subtle color */
 }
 
-.track-list-row:active {
-    background-color: var(--secondary-color);
-    color: white;
+.track-list-row .track-duration {
+    font-family: 'Courier New', monospace;
+    text-align: right;
+    color: var(--text-color);
+}
+
+.track-list-row .track-select-checkbox {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.track-list-row .track-select-checkbox:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 .playlist-detail-header {
@@ -1751,20 +1731,64 @@ input:checked+.slider:before {
     color: var(--text-color);
 }
 
-.lyrics-section h4 {
+.lyrics-section {
+    padding: 0 20px 20px 20px;
+    flex: 1;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.lyrics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.lyrics-header h4 {
     font-size: 16px;
     color: var(--dark-color);
-    margin-bottom: 15px;
+    margin: 0;
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
+.lyrics-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.lyrics-control-btn {
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.lyrics-control-btn:hover {
+    color: var(--primary-color);
+    background-color: rgba(108, 92, 231, 0.1);
+}
+
 .lyrics-container {
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1.6;
     color: var(--dark-color);
     transition: all 0.3s ease;
+    border: 1px solid var(--light-color);
+    background: rgba(255, 255, 255, 0.5);
+    padding: 15px;
+    border-radius: 8px;
+    max-height: 400px;
+    /* or flex grow if parent allows, but fixed max-height is safer for now */
+    overflow-y: auto;
+    margin-top: 10px;
 }
 
 .lyric-line {
@@ -2175,5 +2199,27 @@ input:checked+.slider:before {
     .main-content {
         padding-bottom: 130px;
         /* 64px player + 56px nav + buffer */
+    }
+
+    /* --- Grid Layout Adjustments for Mobile --- */
+    .home-content-grid,
+    .discover-content,
+    .playlists-list,
+    .artists-content,
+    .albums-content {
+        padding: 0 15px 30px;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    }
+
+    /* Adjust font sizes for smaller cards */
+    .recent-media-card h5,
+    .album-name {
+        font-size: 13px;
+    }
+
+    .album-artist,
+    .card-tags span {
+        font-size: 11px;
     }
 }

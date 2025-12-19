@@ -8,6 +8,8 @@ export async function extractMetadata(file) {
         title: file.name.replace(/\.[^/.]+$/, ""), // Default to filename without extension
         artist: 'Unknown Artist',
         album: 'Unknown Album',
+        genre: 'Unknown Genre',
+        year: null,
         lyrics: null,
         duration: 0,
         coverBlob: null
@@ -22,6 +24,8 @@ export async function extractMetadata(file) {
             if (common.title && common.title.trim()) metadata.title = common.title.trim();
             if (common.artist && common.artist.trim()) metadata.artist = common.artist.trim();
             if (common.album && common.album.trim()) metadata.album = common.album.trim();
+            if (common.genre && common.genre.length > 0) metadata.genre = common.genre[0];
+            if (common.year) metadata.year = common.year;
             if (format.duration) metadata.duration = format.duration;
 
             if (common.lyrics && common.lyrics.length > 0) {
@@ -53,6 +57,8 @@ export async function extractMetadata(file) {
                 if (t.title) metadata.title = t.title;
                 if (t.artist) metadata.artist = t.artist;
                 if (t.album) metadata.album = t.album;
+                if (t.genre) metadata.genre = t.genre;
+                if (t.year) metadata.year = t.year;
                 if (t.lyrics) metadata.lyrics = t.lyrics.lyrics || t.lyrics; // jsmediatags lyrics structure varies
 
                 // Duration is not typically provided by jsmediatags directly from tags, 
