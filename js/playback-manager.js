@@ -111,6 +111,12 @@ export async function restorePlaybackState() {
             updateRepeatButtonUI();
 
             updatePlaybackBar(track);
+            // Ensure icons match state (usually paused on reload)
+            const playIcon = getPlayIcon();
+            const mobilePlayIcon = document.querySelector('#mobile-play-btn i');
+            if (playIcon) playIcon.className = 'fas fa-play';
+            if (mobilePlayIcon) mobilePlayIcon.className = 'fas fa-play';
+
             renderQueueTable();
         } else if (playerContext.libraryTracks.length > 0) {
             updatePlaybackBar(playerContext.libraryTracks[0]);
@@ -191,9 +197,11 @@ export function updateProgressBarUI(currentTime, duration) {
     const head = getProgressHead();
     const currEl = getCurrentTimeEl();
     const durEl = getDurationEl();
+    const mobileFill = document.getElementById('mobile-progress-fill');
 
     if (fill) fill.style.width = `${pct}%`;
     if (head) head.style.left = `${pct}%`;
+    if (mobileFill) mobileFill.style.width = `${pct}%`;
     if (currEl) currEl.textContent = formatTime(currentTime);
     if (durEl) durEl.textContent = formatTime(duration);
 }
@@ -247,11 +255,13 @@ export function loadTrack(index, autoPlay = true) {
 export function playTrack() {
     const audioPlayer = getAudioPlayer();
     const playIcon = getPlayIcon();
+    const mobilePlayIcon = document.querySelector('#mobile-play-btn i');
     if (!audioPlayer.src) return;
 
     playerContext.isPlaying = true;
     audioPlayer.play().then(() => {
         if (playIcon) playIcon.className = 'fas fa-pause';
+        if (mobilePlayIcon) mobilePlayIcon.className = 'fas fa-pause';
         document.querySelector('.playback-bar')?.classList.add('playing');
         document.body.classList.add('is-playing');
         updateGlobalPlayingState(playerContext.trackQueue[playerContext.currentTrackIndex]?.id);
@@ -264,9 +274,11 @@ export function playTrack() {
 export function pauseTrack() {
     const audioPlayer = getAudioPlayer();
     const playIcon = getPlayIcon();
+    const mobilePlayIcon = document.querySelector('#mobile-play-btn i');
     audioPlayer.pause();
     playerContext.isPlaying = false;
     if (playIcon) playIcon.className = 'fas fa-play';
+    if (mobilePlayIcon) mobilePlayIcon.className = 'fas fa-play';
     document.querySelector('.playback-bar')?.classList.remove('playing');
     document.body.classList.remove('is-playing');
     updateGlobalPlayingState(playerContext.trackQueue[playerContext.currentTrackIndex]?.id);

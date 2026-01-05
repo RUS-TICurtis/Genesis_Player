@@ -66,9 +66,17 @@
 /* Mobile (max-width: 768px) */
 @media (max-width: 768px) {
 
-    /* Hide top search bar as we have a new home header */
+    /* Show top search bar */
     .search-bar {
-        display: none;
+        display: flex;
+        padding: 10px 15px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1100;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .sidebar {
@@ -150,6 +158,35 @@
         width: auto;
         padding-top: 0;
         justify-content: flex-end;
+    }
+
+    /* Mobile Progress Bar */
+    .mobile-progress-bar {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background-color: var(--light-color);
+        z-index: 1200;
+        cursor: pointer;
+    }
+
+    .mobile-progress-fill {
+        height: 100%;
+        background-color: var(--primary-color);
+        width: 0%;
+        transition: width 0.1s linear;
+    }
+
+    .mobile-play-btn {
+        display: block !important;
+        font-size: 20px;
+        color: var(--dark-color);
+        background: transparent;
+        margin-right: 15px;
+        border: none;
     }
 
     /* --- Bottom Navigation Bar --- */

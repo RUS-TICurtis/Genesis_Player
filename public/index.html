@@ -586,6 +586,11 @@
 
   <!-- Persistent Playback Bar -->
   <div class="playback-bar">
+    <!-- Mobile Progress Bar -->
+    <div class="mobile-progress-bar" id="mobile-progress-bar">
+      <div class="mobile-progress-fill" id="mobile-progress-fill"></div>
+    </div>
+
     <!-- Left Side: Track Info -->
     <div id="playback-bar-track-info" class="playback-track-info">
       <div class="playback-album-art">
@@ -622,6 +627,8 @@
 
     <!-- Right Side: Volume & Other Controls -->
     <div class="playback-extra-controls">
+      <button class="control-btn mobile-play-btn" id="mobile-play-btn"><i class="fas fa-play"
+          id="mobile-play-icon"></i></button>
       <div class="volume-control-container">
         <button class="control-btn" id="volume-btn" title="Volume"><i class="fas fa-volume-up"
             id="volume-icon"></i></button>

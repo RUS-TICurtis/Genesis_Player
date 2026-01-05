@@ -208,13 +208,17 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: var(--primary-color);
-    cursor: pointer;
 }
 
 /* =================================== */
 /* --- New Persistent Playback Bar --- */
 /* =================================== */
+
+/* Mobile Only Controls - Hidden by default on Desktop */
+.mobile-progress-bar,
+.mobile-play-btn {
+    display: none !important;
+}
 
 .playback-bar {
     position: fixed;

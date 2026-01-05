@@ -169,7 +169,10 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     // Playback Controls
-    document.getElementById('play-btn')?.addEventListener('click', () => (playerContext.isPlaying ? PlaybackManager.pauseTrack() : PlaybackManager.playTrack()));
+    const togglePlay = () => (playerContext.isPlaying ? PlaybackManager.pauseTrack() : PlaybackManager.playTrack());
+    document.getElementById('play-btn')?.addEventListener('click', togglePlay);
+    document.getElementById('mobile-play-btn')?.addEventListener('click', togglePlay);
+
     document.getElementById('next-btn')?.addEventListener('click', PlaybackManager.nextTrack);
     document.getElementById('prev-btn')?.addEventListener('click', PlaybackManager.prevTrack);
     document.getElementById('shuffle-btn')?.addEventListener('click', PlaybackManager.toggleShuffle);
