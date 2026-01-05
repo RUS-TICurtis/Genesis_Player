@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Genesis Player</title>
+  <link rel="icon" type="image/png" href="assets/logo-00.png">
+  <!-- Using CDN for icons to ensure they load -->
+  <link rel="stylesheet" href="assets/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Drag and Drop Indicator Styles */
+    .queue-item.drop-target-top {
+      border-top: 2px solid var(--primary-color);
+      box-shadow: 0 -5px 10px -5px var(--primary-color-translucent);
+    }
+
+    .queue-item.drop-target-bottom {
+      border-bottom: 2px solid var(--primary-color);
+      box-shadow: 0 5px 10px -5px var(--primary-color-translucent);
+    }
+
+    .queue-item.dragging {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="music-player-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="logo">
+        <i class="fas fa-music"></i>
+        <span>Genesis</span>
+      </div>
+
+      <div class="menu">
+        <div class="menu-item active" data-target="home-section"><i class="fas fa-home"></i><span>Home</span></div>
+        <div class="menu-item" data-target="library-section"><i class="fas fa-music"></i><span>Library</span></div>
+        <div class="menu-item" data-target="queue-view-section"><i class="fas fa-list-ol"></i><span>Play Queue</span>
+        </div>
+        <div class="menu-item" data-target="discover-section"><i class="fas fa-compass"></i><span>Discover</span></div>
+        <div class="menu-item" data-target="playlists-section"><i class="fas fa-play-circle"></i><span>Playlists</span>
+        </div>
+        <div class="menu-item" data-target="favorites-section"><i class="fas fa-heart"></i><span>Favorites</span></div>
+        <div class="menu-item" data-target="artists-section"><i class="fas fa-users"></i><span>Artists</span></div>
+        <div class="menu-item" data-target="albums-section"><i class="fas fa-compact-disc"></i><span>Albums</span></div>
+      </div>
+
+      <div class="playlist-section">
+        <div class="section-header"><span>Library & Files</span></div>
+
+        <!-- Open Menu -->
+        <div class="open-menu-container">
+          <button id="open-menu-btn" class="open-btn">
+            <i class="fas fa-folder-open"></i>
+            <span id="open-menu-text">Open Music</span>
+            <i class="fas fa-chevron-down ml-auto"></i>
+          </button>
+          <div id="open-menu-dropdown" class="open-dropdown hidden">
+            <div id="open-files-option" class="dropdown-item"><i class="fas fa-file-audio"></i><span>Open File(s)</span>
+            </div>
+            <div id="open-folder-option" class="dropdown-item"><i class="fas fa-folder"></i><span>Open Folder</span>
+            </div>
+            <div id="open-url-option" class="dropdown-item"><i class="fas fa-globe"></i><span>Open URL</span></div>
+          </div>
+        </div>
+
+        <!-- Hidden Inputs -->
+        <input type="file" id="file-input"
+          accept="audio/*,.flac,.opus,.wma,.ape,.dsf,.dsd,.mpc,.wv,.tta,.dff,.aiff,.aif,.ac3,.eac3,.dts" multiple
+          hidden />
+        <input type="file" id="folder-input"
+          accept="audio/*,.flac,.opus,.wma,.ape,.dsf,.dsd,.mpc,.wv,.tta,.dff,.aiff,.aif,.ac3,.eac3,.dts" webkitdirectory
+          directory hidden />
+
+        <div class="playlist-list" style="margin-top: 20px;">
+          <div class="section-header"><span>Your Playlists</span></div>
+          <div id="sidebar-playlists" class="sidebar-playlists">
+            <!-- Dynamic playlists will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Settings Link -->
+        <div class="settings-link-container">
+          <div class="theme-switcher-container">
+            <i class="fas fa-sun theme-icon"></i>
+            <label class="theme-switch">
+              <input type="checkbox" id="theme-toggle-checkbox">
+              <span class="slider round"></span>
+            </label>
+            <i class="fas fa-moon theme-icon"></i>
+          </div>
+          <div class="menu-item" data-target="profile-modal"><i class="fas fa-cog"></i><span>Settings</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Main Content Wrapper -->
+    <div class="main-content">
+      <!-- Global Top Bar -->
+      <div class="search-bar">
+        <button id="sidebar-toggle" class="hamburger"><i class="fas fa-bars"></i></button>
+        <i class="fas fa-search"></i>
+        <input type="text" id="search-input" placeholder="Search local tracks..." />
+        <!-- Search dropdown for live results -->
+        <div id="search-dropdown" class="search-dropdown hidden" role="listbox" aria-label="Search results"></div>
+        <div class="user-profile">
+          <label for="profile-pic-input" class="profile-pic-wrapper" style="cursor: pointer;">
+            <img id="profile-pic" src="assets/profile-default.jpg" alt="Profile"
+              style="width: 100%; height: 100%; object-fit: cover;" />
+            <input type="file" id="profile-pic-input" accept="image/*" hidden />
+          </label>
+        </div>
+      </div>
+
+      <!-- Content Sections -->
+
+      <!-- 1. HOME SECTION (The Player Dashboard) -->
+      <!-- 1. HOME SECTION (The Player Dashboard) -->
+      <div id="home-section" class="main-section home-layout">
+
+        <!-- Welcome Section -->
+        <div class="welcome-section">
+          <img src="assets/profile-default.jpg" alt="Profile" class="welcome-profile-pic">
+          <div class="welcome-text">
+            <span class="welcome-sub">Welcome,</span>
+            <span class="welcome-name">User Name</span>
+          </div>
+        </div>
+
+        <!-- Quick Actions Grid -->
+        <div class="quick-actions-grid">
+          <div class="action-card" id="home-btn-history">
+            <i class="fas fa-history"></i>
+            <span>History</span>
+          </div>
+          <div class="action-card" id="home-btn-last-added">
+            <i class="fas fa-plus-square"></i>
+            <span>Last added</span>
+          </div>
+          <div class="action-card" id="home-btn-most-played">
+            <i class="fas fa-chart-line"></i>
+            <span>Most played</span>
+          </div>
+
+        </div>
+
+        <!-- Suggestions Section -->
+        <div class="section-header-row">
+          <span class="section-title">Suggestions</span>
+          <button class="section-action-btn"><i class="fas fa-redo"></i></button>
+        </div>
+        <div class="horizontal-scroll-container" id="home-suggestions-container">
+          <!-- Populated by JS -->
+          <div class="suggestion-card">
+            <img src="assets/cover-placeholder.png" onerror="this.src='assets/logo.png'" alt="Mix">
+            <div class="suggestion-card-overlay">
+              <span class="suggestion-card-title">New Music Mix</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Artists -->
+        <div class="section-header-row">
+          <span class="section-title">Top artists</span>
+          <button class="section-action-btn"><i class="fas fa-arrow-right"></i></button>
+        </div>
+        <div class="horizontal-scroll-container" id="home-top-artists-container">
+          <!-- Populated by JS with .artist-circle-card -->
+        </div>
+
+        <!-- Top Albums -->
+        <div class="section-header-row">
+          <span class="section-title">Top albums</span>
+          <button class="section-action-btn"><i class="fas fa-arrow-right"></i></button>
+        </div>
+        <div class="horizontal-scroll-container" id="home-top-albums-container">
+          <!-- Populated by JS with .album-square-card -->
+        </div>
+
+        <!-- Recent Artists -->
+        <div class="section-header-row">
+          <span class="section-title">Recent artists</span>
+          <button class="section-action-btn"><i class="fas fa-arrow-right"></i></button>
+        </div>
+        <div class="horizontal-scroll-container" id="home-recent-artists-container">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Recent Albums -->
+        <div class="section-header-row">
+          <span class="section-title">Recent albums</span>
+          <button class="section-action-btn"><i class="fas fa-arrow-right"></i></button>
+        </div>
+        <div class="horizontal-scroll-container" id="home-recent-albums-container">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Favorites -->
+        <div class="section-header-row">
+          <span class="section-title">Favorites</span>
+          <button class="section-action-btn"><i class="fas fa-arrow-right"></i></button>
+        </div>
+        <div class="horizontal-scroll-container" id="home-favorites-container">
+          <!-- Populated by JS -->
+        </div>
+
+        <div style="height: 100px;"></div> <!-- Spacer for bottom nav -->
+
+      </div>
+
+      <!-- 1.5. LIBRARY SECTION -->
+      <div id="library-section" class="main-section hidden">
+        <div class="library-header">
+          <h2>My Library</h2>
+          <div class="header-actions">
+            <button id="library-play-all-btn" class="btn-primary" title="Play All">
+              <i class="fas fa-play"></i> Play All
+            </button>
+            <div class="view-toggle-buttons">
+              <button id="library-grid-view-btn" class="view-toggle-btn active" title="Grid View"><i
+                  class="fas fa-th-large"></i></button>
+              <button id="library-list-view-btn" class="view-toggle-btn" title="List View"><i
+                  class="fas fa-list"></i></button>
+            </div>
+          </div>
+        </div>
+        <div id="library-grid" class="home-content-grid">
+          <!-- All library tracks will be rendered here -->
+          <div class="empty-state">Your library is empty. Open some files to get started.</div>
+        </div>
+      </div>
+
+      <!-- 2. DISCOVER SECTION -->
+      <div id="discover-section" class="main-section hidden">
+        <div class="discover-header">
+          <h2>Discover</h2>
+          <div class="discover-search-container">
+            <input type="text" id="discover-search-input" placeholder="Search artists, albums, tracks...">
+            <button id="discover-search-btn" class="btn-primary" title="Search online"><i
+                class="fas fa-search"></i></button>
+            <button id="discover-refresh-btn" class="btn-secondary" title="Refresh / Surprise Me"><i
+                class="fas fa-sync-alt"></i></button>
+          </div>
+        </div>
+        <div id="discover-grid" class="discover-content media-grid">
+          <div class="empty-state">
+            <i class="fas fa-compass" style="font-size: 48px; color: #ddd; margin-bottom: 10px;"></i>
+            <p>Connect online to discover new music.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Template for a Discover Track Card -->
+      <!-- This template now uses the .recent-media-card styling for consistency -->
+      <template id="discover-track-template">
+        <div class="recent-media-card discover-card">
+          <div class="album-art">
+            <img src="" alt="Album Art" class="discover-album-art">
+          </div>
+          <div class="card-footer">
+            <h5 class="discover-track-title">Track Title</h5>
+            <button class="control-btn small play-stream-btn" title="Play Stream"><i class="fas fa-play"></i></button>
+            <button class="control-btn small download-track-btn" title="Add to Library"><i
+                class="fas fa-download"></i></button>
+          </div>
+        </div>
+      </template>
+
+      <!-- 3. PLAYLISTS SECTION -->
+      <div id="playlists-section" class="main-section hidden">
+        <div class="playlists-header">
+
+          <h2>Playlists</h2>
+          <button id="create-playlist-btn" class="btn-primary" title="Create new playlist">
+            <i class="fas fa-plus"></i> New Playlist
+          </button>
+        </div>
+        <div id="playlists-list" class="playlists-list">
+          <div class="empty-state">
+            <i class="fas fa-compact-disc" style="font-size: 48px; color: #ddd; margin-bottom: 10px;"></i>
+            <p>No playlists yet. Create one to get started!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Favorites SECTION -->
+      <div id="favorites-section" class="main-section hidden">
+        <div class="library-header">
+          <h2>Favorites</h2>
+        </div>
+        <div id="favorites-grid" class="home-content-grid">
+          <!-- Favorites tracks will be rendered here -->
+        </div>
+      </div>
+
+      <!-- 4. ARTISTS SECTION -->
+      <div id="artists-section" class="main-section hidden">
+        <div class="artists-header">
+          <h2>Artists</h2>
+        </div>
+        <div class="artists-content">
+          <!-- Artist cards will be rendered here -->
+        </div>
+      </div>
+
+      <!-- 5. ALBUMS SECTION -->
+      <div id="albums-section" class="main-section hidden">
+        <div class="albums-header">
+          <h2>Albums</h2>
+        </div>
+        <div class="albums-content">
+          <!-- Album cards will be rendered here -->
+        </div>
+      </div>
+
+      <!-- 6. QUEUE VIEW SECTION -->
+      <div id="queue-view-section" class="main-section hidden">
+        <div class="queue-view-header">
+          <h2 id="queue-header-title">Play Queue</h2>
+          <div class="queue-view-actions">
+            <button id="queue-add-files-btn" class="btn-secondary"><i class="fas fa-plus"></i> Add File(s)</button>
+            <button id="queue-save-playlist-btn" class="btn-primary" title="Save current queue as a new playlist"><i
+                class="fas fa-save"></i> Save as Playlist</button>
+            <button id="queue-clear-btn" class="btn-danger"><i class="fas fa-trash"></i> Clear</button>
+          </div>
+        </div>
+        <div class="track-list-header">
+          <span class="status-icon-header"><input type="checkbox" id="select-all-queue" title="Select All"></span>
+          <span class="status-icon-header">#</span>
+          <span>Title</span>
+          <span>Artist</span>
+          <span>Album</span>
+          <span>Year</span>
+          <span>Genre</span>
+          <span style="text-align: right;">Duration</span>
+        </div>
+        <div class="queue-list-container" style="background: transparent; margin: 0; padding: 0 30px 30px;">
+          <div id="queue-list" class="queue-list">
+            <!-- Queue items will be rendered here in a table format -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. PROFILE SECTION -->
+      <!-- 7. PROFILE MODAL -->
+      <div id="profile-modal" class="main-section hidden">
+        <div class="modal-content profile-modal-content">
+          <button id="profile-close-btn" class="modal-close-btn"><i class="fas fa-times"></i></button>
+          <div class="profile-header" id="profile-header-trigger" style="cursor: pointer;">
+            <div class="profile-header-art">
+              <img class="profile-user-img" src="assets/profile-default.jpg" alt="Profile">
+            </div>
+            <div class="profile-header-info">
+              <span class="profile-label">Profile</span>
+              <h1 class="profile-name">Genesis</h1>
+              <div class="profile-stats">
+                <!-- Stats removed by user -->
+              </div>
+            </div>
+          </div>
+          <div class="profile-actions-bar">
+            <i class="fas fa-cog profile-action-icon" title="Settings"></i>
+            <i class="fas fa-ellipsis-h profile-action-icon" title="More"></i>
+          </div>
+          <div class="profile-body">
+            <div class="top-artists-section">
+              <h3>Top artists this month</h3>
+              <p class="section-subtitle">Only visible to you</p>
+              <div id="profile-top-artists-grid" class="top-artists-grid">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Profile Edit Modal -->
+      <div id="profile-edit-modal" class="modal hidden">
+        <div class="modal-content profile-details-modal">
+          <div class="modal-header">
+            <h3>Profile details</h3>
+            <button id="close-profile-edit-btn" class="close-modal-btn">&times;</button>
+          </div>
+          <div class="profile-details-body">
+            <div class="profile-details-pic-side">
+              <div class="large-profile-pic-container" id="edit-profile-pic-trigger">
+                <img id="edit-profile-pic-preview" src="assets/profile-default.jpg" alt="Profile Preview">
+                <div class="change-pic-overlay"><i class="fas fa-pencil-alt"></i> Choose photo</div>
+              </div>
+              <input type="file" id="edit-profile-pic-input" accept="image/*" hidden>
+            </div>
+            <div class="profile-details-info-side">
+              <div class="form-group">
+                <label for="edit-profile-name-input">Name</label>
+                <input type="text" id="edit-profile-name-input" placeholder="Name">
+              </div>
+              <div class="profile-details-footer">
+                <button id="save-profile-details-btn" class="save-btn">Save</button>
+              </div>
+              <p class="disclaimer">By proceeding, you agree to give Genesis access to the image you choose to upload.
+                Please make sure you have the right to upload the image.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- This view is shown when a playlist is clicked -->
+      <div id="playlist-detail-view" class="main-section hidden"></div>
+
+      <!-- New detail views for albums and artists -->
+      <div id="album-detail-view" class="main-section hidden"></div>
+      <div id="artist-detail-view" class="main-section hidden"></div>
+
+      <!-- Placeholder for Settings -->
+      <div id="settings-section" class="main-section hidden">
+        <div class="discover-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="empty-state">
+          <p>Settings page coming soon.</p>
+        </div>
+      </div>
+
+      <!-- Floating Shuffle Button -->
+      <button id="library-shuffle-fab" class="shuffle-fab" title="Shuffle Library">
+        <i class="fas fa-random"></i>
+        <span class="fab-text">Shuffle</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Selection Action Bar -->
+  <div id="selection-action-bar" class="selection-action-bar hidden">
+    <div class="selection-info">
+      <span id="selection-count">0</span> items selected
+    </div>
+    <div class="selection-actions">
+      <button id="selection-add-to-playlist-btn" class="btn-secondary"><i class="fas fa-plus"></i> Add to
+        Playlist</button>
+      <button id="selection-remove-btn" class="btn-danger"><i class="fas fa-trash"></i> Remove</button>
+    </div>
+    <button id="selection-clear-btn" class="control-btn small" title="Clear selection"><i
+        class="fas fa-times"></i></button>
+  </div>
+
+  <!-- Extended Info Panel (Right Sidebar) -->
+  <div id="extended-info-panel" class="extended-info-panel">
+    <div class="panel-header">
+      <h3>Now Playing</h3>
+      <button id="close-extended-panel-btn" class="control-btn small" title="Close"><i
+          class="fas fa-times"></i></button>
+    </div>
+    <div class="panel-content">
+      <div id="extended-info-art" class="extended-album-art">
+        <img src="assets/logo.png" alt="Album Art">
+      </div>
+      <div id="extended-info-details" class="extended-track-details">
+        <h3 id="extended-info-title">Track Title</h3>
+        <p id="extended-info-artist">Artist Name</p>
+      </div>
+      <div class="lyrics-section">
+        <div class="lyrics-header">
+          <h4><i class="fas fa-microphone-alt"></i> Lyrics</h4>
+          <div class="lyrics-controls">
+            <button id="lyrics-refresh-btn" class="lyrics-control-btn" title="Fetch next most accurate lyrics"><i
+                class="fas fa-sync-alt"></i></button>
+            <button id="lyrics-search-btn" class="lyrics-control-btn" title="Manual Search"><i
+                class="fas fa-search"></i></button>
+          </div>
+        </div>
+        <div id="lyrics-container" class="lyrics-container">
+          <p class="lyric-line upcoming">Waiting for you to tell me I'm okay</p>
+          <p class="lyric-line active">I feel like I'm at a standstill</p>
+          <p class="lyric-line past">No one can tell me nothing</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation (Mobile Only) -->
+  <div class="bottom-nav">
+    <div class="nav-item active" data-target="home-section"><i class="fas fa-home"></i><span>For you</span></div>
+    <div class="nav-item" data-target="library-section"><i class="fas fa-music"></i><span>Songs</span></div>
+    <div class="nav-item" data-target="albums-section"><i class="fas fa-compact-disc"></i><span>Albums</span></div>
+    <div class="nav-item" data-target="artists-section"><i class="fas fa-user"></i><span>Artists</span></div>
+    <div class="nav-item" data-target="playlists-section"><i class="fas fa-list"></i><span>Playlists</span></div>
+  </div>
+
+  <!-- Modals -->
+  <div id="url-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Open URL</h3>
+      <p>Enter a link to an audio file:</p>
+      <input type="text" id="url-input" placeholder="https://example.com/song.mp3" />
+      <div class="modal-actions">
+        <button id="url-cancel-btn">Cancel</button>
+        <button id="url-load-btn" class="primary">Load</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Track Modal -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content" style="max-width: 600px;">
+      <h3>Edit Track Details</h3>
+      <input type="hidden" id="edit-track-id">
+      <div class="form-group">
+        <label for="edit-title-input">Title</label>
+        <input type="text" id="edit-title-input" class="modal-input">
+      </div>
+      <div class="form-group">
+        <label for="edit-artist-input">Artist</label>
+        <input type="text" id="edit-artist-input" class="modal-input">
+      </div>
+      <div class="form-group">
+        <label for="edit-album-input">Album</label>
+        <input type="text" id="edit-album-input" class="modal-input">
+      </div>
+      <div class="form-group">
+        <label for="edit-lyrics-input">Lyrics</label>
+        <textarea id="edit-lyrics-input" rows="10"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="edit-cancel-btn">Cancel</button>
+        <button id="edit-save-btn" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="confirm-modal-title">Confirm Action</h3>
+      <p id="confirm-modal-text"></p>
+      <div class="modal-actions">
+        <button id="confirm-cancel-btn">Cancel</button>
+        <button id="confirm-ok-btn" class="danger">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add to Playlist Modal -->
+  <div id="add-to-playlist-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Add to Playlist</h3>
+      <div id="playlist-selection-list" class="playlist-selection-list">
+        <!-- Existing playlists will be rendered here -->
+      </div>
+      <div class="modal-actions">
+        <button id="playlist-modal-cancel-btn">Cancel</button>
+        <button id="playlist-modal-new-btn" class="primary">New Playlist</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="message-modal" class="modal hidden">
+    <div class="modal-content">
+      <p id="modal-text"></p>
+      <div class="modal-actions">
+        <button id="msg-close-btn" class="primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Input Modal (Replacing prompts) -->
+  <div id="input-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="input-modal-title">Input Required</h3>
+      <div class="form-group">
+        <label id="input-modal-label" for="generic-input-field"></label>
+        <input type="text" id="generic-input-field" class="modal-input" placeholder="Type here..." />
+      </div>
+      <div class="modal-actions">
+        <button id="input-modal-cancel-btn">Cancel</button>
+        <button id="input-modal-ok-btn" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="audio-player"></audio>
+
+  <!-- Persistent Playback Bar -->
+  <div class="playback-bar">
+    <!-- Left Side: Track Info -->
+    <div id="playback-bar-track-info" class="playback-track-info">
+      <div class="playback-album-art">
+        <img id="album-art-img" class="hidden" alt="Album Art" />
+        <div id="album-art-placeholder" class="placeholder-icon">
+          <i class="fas fa-music"></i>
+        </div>
+      </div>
+      <div class="playback-song-details">
+        <h4 id="song-title">No Track Selected</h4>
+        <p id="artist-name">Load files to begin</p>
+      </div>
+    </div>
+
+    <!-- Center: Controls & Progress -->
+    <div class="playback-controls-center">
+      <div class="playback-progress-container">
+        <span id="current-time">0:00</span>
+        <div class="progress-bar" id="progress-container">
+          <div class="progress-head" id="progress-head"></div>
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <span id="duration">0:00</span>
+      </div>
+      <div class="controls">
+        <button class="control-btn" id="shuffle-btn" title="Shuffle"><i class="fas fa-random"></i></button>
+        <button class="control-btn" id="prev-btn" title="Previous"><i class="fas fa-step-backward"></i></button>
+        <button class="control-btn play-btn" id="play-btn" title="Play/Pause"><i class="fas fa-play"
+            id="play-icon"></i></button>
+        <button class="control-btn" id="next-btn" title="Next"><i class="fas fa-step-forward"></i></button>
+        <button class="control-btn" id="repeat-btn" title="Repeat"><i class="fas fa-redo"></i></button>
+      </div>
+    </div>
+
+    <!-- Right Side: Volume & Other Controls -->
+    <div class="playback-extra-controls">
+      <div class="volume-control-container">
+        <button class="control-btn" id="volume-btn" title="Volume"><i class="fas fa-volume-up"
+            id="volume-icon"></i></button>
+        <div class="volume-control-popup" id="volume-popup">
+          <button class="control-btn small" id="mute-btn" title="Mute"><i class="fas fa-volume-up"></i></button>
+          <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7" />
+          <span id="volume-percentage">70</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.11/dist/music-metadata-browser.min.js"></script> -->
+  <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.10/dist/music-metadata-browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+
+  <script type="module" src="js/script.js"></script>
+  <script>
+
+  </script>
+</body>
+
+</html>
