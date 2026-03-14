@@ -123,7 +123,16 @@ export function switchSection(targetId, detailId = null) {
 
     const items = [...elements.menuItems(), ...elements.bottomNavItems()];
     items.forEach(item => {
-        item.classList.toggle('active', item.dataset.target === targetId);
+        const isActive = item.dataset.target === targetId;
+        item.classList.toggle('active', isActive);
+        if (isActive && window.innerWidth <= 768) {
+            const mobileTitle = document.querySelector('.mobile-section-title');
+            if (mobileTitle) {
+                // Get span text from the item
+                const label = item.querySelector('span')?.textContent || 'Genesis';
+                mobileTitle.textContent = label;
+            }
+        }
     });
 
     // Persist UI State

@@ -695,22 +695,35 @@ export async function renderDetailTrackList(tracksOrIds, container, options = {}
                     </div>
                     <i class="fas fa-music row-index"></i>
                 </div>
-                <div class="track-title-col">
+                <div class="track-row-art">
+                    <img src="${trackData.coverURL || getFallbackImage(trackData.id, trackData.title)}" alt="Art">
+                </div>
+                <div class="track-details-col">
+                    <span class="track-title">${truncate(trackData.title || 'Unknown Title', 40)}</span>
+                    <span class="track-artist">${truncate(trackData.album || 'Unknown Album', 20)}</span>
+                </div>
+                <div class="track-title-col desktop-only">
                     <span class="track-title">${truncate(trackData.title || 'Unknown Title', 40)}</span>
                 </div>
-                <div class="track-artist-col">
+                <div class="track-artist-col desktop-only">
                     <span class="track-artist">${truncate(trackData.artist || 'Unknown Artist', 20)}</span>
                 </div>
-                <span class="track-album">${truncate(trackData.album || 'Unknown album', 20)}</span>
-                <span class="track-year">${trackData.year || ''}</span>
-                <span class="track-genre">${truncate(trackData.genre || 'Unknown genre', 20)}</span>
-                <span class="track-duration">${formatTime(trackData.duration)}</span>
+                <span class="track-album desktop-only">${truncate(trackData.album || 'Unknown album', 20)}</span>
+                <span class="track-year desktop-only">${trackData.year || ''}</span>
+                <span class="track-genre desktop-only">${truncate(trackData.genre || 'Unknown genre', 20)}</span>
+                <span class="track-duration desktop-only">${formatTime(trackData.duration)}</span>
+                <button class="track-action-btn mobile-only"><i class="fas fa-ellipsis-v"></i></button>
             `;
 
             row.addEventListener('click', e => {
-                if (e.target.type === 'checkbox') return;
+                if (e.target.closest('.track-select-checkbox') || e.target.closest('.track-action-btn')) return;
                 // Pass the object if possible to ensure playback can start even if not in library
                 if (startPlaybackFn) startPlaybackFn([typeof item === 'object' ? item : trackId]);
+            });
+
+            row.querySelector('.track-action-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (renderTrackContextMenuFn) renderTrackContextMenuFn(trackId, e.currentTarget, { isFromLibrary: true });
             });
             row.querySelector('.track-select-checkbox').addEventListener('change', (e) => {
                 toggleTrackSelection(trackId);

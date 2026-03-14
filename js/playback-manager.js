@@ -177,7 +177,7 @@ export function updatePlaybackBar(track) {
     }
 
     if (songTitle) songTitle.textContent = truncate(track.title || 'Unknown Title', 40);
-    if (artistName) artistName.textContent = truncate(track.artist || (track.isURL ? 'Web Stream' : 'Unknown Artist'), 20);
+    if (artistName) artistName.textContent = truncate(track.album || (track.isURL ? 'Web Stream' : 'Unknown Album'), 20);
 
     const imgUrl = track.coverURL || getFallbackImage(track.id, track.title);
     if (artImg) { artImg.src = imgUrl; artImg.classList.remove('hidden'); }
@@ -217,6 +217,16 @@ export function updateProgressBarUI(currentTime, duration) {
     if (fill) fill.style.width = `${pct}%`;
     if (head) head.style.left = `${pct}%`;
     if (mobileFill) mobileFill.style.width = `${pct}%`;
+
+    // Circular Progress
+    const circularFill = document.getElementById('mobile-circular-progress-fill');
+    if (circularFill) {
+        // stroke-dasharray is 100, 100. offset 0 is full, offset 100 is empty.
+        // Wait, dashoffset works differently depending on how it's set.
+        // Let's use dasharray = "pct, 100" actually, it's easier.
+        circularFill.setAttribute('stroke-dasharray', `${pct}, 100`);
+    }
+
     if (currEl) currEl.textContent = formatTime(currentTime);
     if (durEl) durEl.textContent = formatTime(duration);
 }
@@ -233,7 +243,7 @@ export function getTimeHandler() {
     };
 }
 
-export function loadTrack(index, autoPlay = true) {
+export async function loadTrack(index, autoPlay = true) {
     const audioPlayer = getAudioPlayer();
 
     // Memory cleanup: Revoke objectURL of current track before switching
@@ -252,6 +262,24 @@ export function loadTrack(index, autoPlay = true) {
         // Lazy load the objectURL if it doesn't exist
         if (!track.objectURL && track.audioBlob) {
             track.objectURL = URL.createObjectURL(track.audioBlob);
+        // If it's a Spotify track or has no objectURL but is from a web source
+        if (!track.objectURL && (track.source === 'spotify' || track.source === 'lastfm' || track.source === 'audiodb' || track.source === 'musicbrainz')) {
+            try {
+                showMessage(`Resolving stream for "${track.title}"...`);
+                const resolveRes = await fetch(`/api/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
+                const resolveData = await resolveRes.json();
+                if (resolveData.url) {
+                    track.objectURL = resolveData.url;
+                    track.source = resolveData.source || track.source; // Keep track of actual source
+                } else {
+                    showMessage(`No stream found for "${track.title}". Reverting to library/other sources.`);
+                    return;
+                }
+            } catch (e) {
+                console.error("Resolve error", e);
+                showMessage("Stream resolution failed.");
+                return;
+            }
         }
         audioPlayer.src = track.objectURL;
     }
@@ -330,13 +358,10 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
         return;
     }
 
-    // Check if we are selecting the currently playing track from a single click
-    // If tracksOrIds contains just one item (or we are starting a list at a specific index), 
-    // and that item is the currently playing track, we should just toggle play/pause.
+    // If we are selecting from a single click, targetTrack is what we want.
     const targetTrack = newQueue[startIndex];
     if (playerContext.currentTrackIndex !== -1 && playerContext.trackQueue[playerContext.currentTrackIndex]) {
         const currentId = playerContext.trackQueue[playerContext.currentTrackIndex].id;
-        // If we are just clicking "play" on a single track card or row which is already active
         if (tracksOrIds.length === 1 && targetTrack.id === currentId && !shuffle) {
             if (playerContext.isPlaying) {
                 pauseTrack();
@@ -346,9 +371,6 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
             return;
         }
     }
-
-    const discoverTracksInQueue = newQueue.filter(t => t.isFromDiscover);
-    playerContext.trackQueue.unshift(...discoverTracksInQueue.filter(dt => !playerContext.trackQueue.some(qt => qt.id === dt.id)));
 
     if (shuffle) {
         for (let i = newQueue.length - 1; i > 0; i--) {
@@ -501,5 +523,21 @@ export function initProgressBarListeners() {
         isDragging = false;
     });
 
-    // ... touch events ...
+    progressBarContainer.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        seek(e);
+        e.preventDefault();
+    }, { passive: false });
+
+    progressBarContainer.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        seek(e);
+        e.preventDefault();
+    }, { passive: false });
+
+    const stopDragging = () => {
+        isDragging = false;
+    };
+    document.addEventListener('touchend', stopDragging, { passive: true });
+    document.addEventListener('touchcancel', stopDragging, { passive: true });
 }
