@@ -1,23 +1,21 @@
 // index.js
-import './config.js';
 import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
+import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 import { fetchJamendoTracks } from './jamendo.js';
+import { fetchSpotifyTrending } from './spotify.js';
 import { fetchTopTracks, fetchTrackInfo } from './lastfm.js';
-import { fetchHearThisTracks, searchHearThis } from './hearthis.js';
-import { fetchTrending as fetchAudioDBTrending } from './theaudiodb.js';
+import { fetchTrending } from './theaudiodb.js';
+import { fetchHearThisTracks } from './hearthis.js';
 import { fetchMusicBrainzTrending } from './musicbrainz.js';
 import { fetchGeniusLyrics } from './genius.js';
-import { fetchSpotifyTrending, searchSpotify, fetchSpotifyGenre } from './spotify.js';
-import { fetchJamendoTracks as searchJamendoForResolve } from './jamendo.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 1552;
@@ -77,6 +75,16 @@ app.get('/api/genre', async (req, res) => {
   }
 });
 
+// New Endpoint: Spotify Trending
+app.get('/api/discover/spotify', async (req, res) => {
+  try {
+    const tracks = await fetchSpotifyTrending();
+    res.json(tracks);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch Spotify data' });
+  }
+});
+
 // API endpoint to proxy Jamendo requests
 app.get('/api/discover', async (req, res) => {
   try {
@@ -101,11 +109,10 @@ app.get('/api/discover/lastfm', async (req, res) => {
 // New Endpoint: TheAudioDB Trending
 app.get('/api/discover/theaudiodb', async (req, res) => {
   try {
-    const trending = await fetchAudioDBTrending();
-    res.json(trending || []);
+    const trending = await fetchTrending();
+    res.json(trending);
   } catch (error) {
-    console.error('AudioDB Route Error:', error.message);
-    res.json([]); // Return empty array instead of 500
+    res.status(500).json({ error: 'Failed to fetch AudioDB data' });
   }
 });
 
@@ -127,9 +134,10 @@ app.get('/api/discover/musicbrainz', async (req, res) => {
     const limit = req.query.limit || 20;
     // fetchMusicBrainzTrending is imported at top
     const tracks = await fetchMusicBrainzTrending(limit);
-    res.json(tracks || []);
+    res.json(tracks);
   } catch (error) {
-    console.error("MusicBrainz Content Error:", error.message);
+    console.error("MusicBrainz Content Error:", error.response ? error.response.data : error.message);
+    // Return empty array so frontend doesn't show error, just shows other content
     res.json([]);
   }
 });
@@ -151,78 +159,6 @@ app.get('/api/lyrics', async (req, res) => {
   } catch (error) {
     console.error('Lyrics endpoint error:', error);
     res.status(500).json({ error: 'Failed to fetch lyrics' });
-  }
-});
-
-// Spotify Endpoints
-app.get('/api/spotify/trending', async (req, res) => {
-  try {
-    const tracks = await fetchSpotifyTrending();
-    res.json(tracks);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch Spotify trending' });
-  }
-});
-
-app.get('/api/spotify/search', async (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q) return res.status(400).json({ error: 'Query is required' });
-    const tracks = await searchSpotify(q);
-    res.json(tracks);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to search Spotify' });
-  }
-});
-
-app.get('/api/spotify/genre', async (req, res) => {
-  try {
-    const { genre, limit } = req.query;
-    if (!genre) return res.status(400).json({ error: 'Genre is required' });
-    const tracks = await fetchSpotifyGenre(genre, limit || 5);
-    res.json(tracks);
-  } catch (error) {
-    res.status(500).json({ error: `Failed to fetch Spotify genre ${req.query.genre}` });
-  }
-});
-
-app.get('/api/spotify/resolve', async (req, res) => {
-  try {
-    const { title, artist } = req.query;
-    if (!title || !artist) return res.status(400).json({ error: 'Title and artist are required' });
-
-    console.log(`Resolving stream for: ${title} - ${artist}`);
-
-    // Strategy 1: Jamendo Search
-    const jamendoData = await searchJamendoForResolve(`${title} ${artist}`, 'popularity_week');
-    if (jamendoData && jamendoData.results && jamendoData.results.length > 0) {
-      const track = jamendoData.results[0];
-      console.log(`Found Jamendo match: ${track.name}`);
-      return res.json({
-        url: track.audio,
-        source: 'jamendo',
-        matchType: 'audio'
-      });
-    }
-
-    // Strategy 2: HearThis.at Search
-    console.log(`Searching HearThis.at for: ${title} ${artist}`);
-    const htResults = await searchHearThis(`${title} ${artist}`, 1, 5);
-    if (htResults && htResults.length > 0) {
-      const track = htResults[0];
-      console.log(`Found HearThis match: ${track.title}`);
-      return res.json({
-        url: track.stream_url,
-        source: 'hearthis',
-        matchType: 'audio'
-      });
-    }
-
-    console.warn(`No stream found for: ${title} - ${artist}`);
-    res.json({ url: null });
-  } catch (error) {
-    console.error('Resolve error:', error);
-    res.status(500).json({ error: 'Failed to resolve track' });
   }
 });
 

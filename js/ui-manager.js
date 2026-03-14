@@ -23,7 +23,7 @@ export const elements = {
     mainSections: () => getCached(null, '.main-section'),
     albumDetailView: () => getCached('album-detail-view'),
     artistDetailView: () => getCached('artist-detail-view'),
-    menuItems: () => getCached(null, '.menu-item'),
+    menuItems: () => getCached(null, '.menu-item, .settings-btn'),
     bottomNavItems: () => getCached(null, '.bottom-nav .nav-item'),
     selectionCount: () => getCached('selection-count'),
     selectionBar: () => getCached('selection-action-bar'),
@@ -123,16 +123,7 @@ export function switchSection(targetId, detailId = null) {
 
     const items = [...elements.menuItems(), ...elements.bottomNavItems()];
     items.forEach(item => {
-        const isActive = item.dataset.target === targetId;
-        item.classList.toggle('active', isActive);
-        if (isActive && window.innerWidth <= 768) {
-            const mobileTitle = document.querySelector('.mobile-section-title');
-            if (mobileTitle) {
-                // Get span text from the item
-                const label = item.querySelector('span')?.textContent || 'Genesis';
-                mobileTitle.textContent = label;
-            }
-        }
+        item.classList.toggle('active', item.dataset.target === targetId);
     });
 
     // Persist UI State

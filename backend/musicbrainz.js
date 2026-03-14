@@ -20,8 +20,8 @@ async function fetchMusicBrainzTrending(limit = 20) {
     if (response.data && response.data.releases) {
       return response.data.releases.map(release => {
         // Construct cover art URL (Cover Art Archive)
-        // https://coverartarchive.org/release/{release-id}/front
-        const coverURL = `https://coverartarchive.org/release/${release.id}/front`;
+        // http://coverartarchive.org/release/{release-id}/front
+        const coverURL = `http://coverartarchive.org/release/${release.id}/front`;
 
         return {
           id: release.id,

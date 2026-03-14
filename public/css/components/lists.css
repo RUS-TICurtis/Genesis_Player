@@ -258,15 +258,6 @@ body.is-playing .bar {
     padding: 10px 30px;
 }
 
-.mobile-only {
-    display: none !important;
-}
-
-.track-row-art,
-.track-details-col {
-    display: none;
-}
-
 /* Hide header icon columns on mobile if necessary, or simplify */
 @media (max-width: 768px) {
     .track-list-header {

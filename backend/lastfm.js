@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 async function fetchLastFM(artist) {
-  const res = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+  const res = await axios.get('http://ws.audioscrobbler.com/2.0/', {
     params: {
       method: 'artist.getinfo',
       artist,
@@ -14,9 +14,9 @@ async function fetchLastFM(artist) {
 
 async function fetchTopTracks(limit = 50) {
   try {
-    const res = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+    const res = await axios.get('http://ws.audioscrobbler.com/2.0/', {
       params: {
-        method: 'chart.getTopTracks',
+        method: 'chart.gettoptracks',
         api_key: process.env.LASTFM_API_KEY,
         format: 'json',
         limit

@@ -50,10 +50,6 @@ body {
     overflow-x: hidden;
 }
 
-img {
-    display: block;
-}
-
 /* Marquee animation for long song titles */
 @keyframes marquee {
     0% {

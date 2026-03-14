@@ -16,26 +16,15 @@ export function setDiscoverDependencies(startPlayback) {
     }
 }
 
-async function fetchSpotifyTrending() {
+// Fetchers for other APIs
+async function fetchSpotifyTracks() {
     try {
-        const response = await fetch('/api/spotify/trending');
+        const response = await fetch('/api/discover/spotify');
         if (!response.ok) throw new Error('Spotify API Request failed');
         const data = await response.json();
         return data;
     } catch (e) {
-        console.error('Spotify fetch error:', e);
-        return [];
-    }
-}
-
-async function fetchSpotifyGenre(genre, limit = 5) {
-    try {
-        const response = await fetch(`/api/spotify/genre?genre=${encodeURIComponent(genre)}&limit=${limit}`);
-        if (!response.ok) throw new Error('Spotify Genre API Request failed');
-        const data = await response.json();
-        return data;
-    } catch (e) {
-        console.error(`Spotify genre fetch error (${genre}):`, e);
+        console.error(e);
         return [];
     }
 }
@@ -89,19 +78,6 @@ async function fetchAudioDBTrending() {
         }));
     } catch (e) {
         console.error(e);
-        return [];
-    }
-}
-
-
-async function searchSpotify(query) {
-    try {
-        const response = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error('Spotify search failed');
-        const data = await response.json();
-        return data;
-    } catch (e) {
-        console.error('Spotify search error:', e);
         return [];
     }
 }
@@ -183,7 +159,7 @@ export function renderDiscoverCards(tracks) {
                     ${track.objectURL ? '' : '<div class="source-badge" style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.7);color:white;padding:2px 5px;font-size:10px;">MetaData Only</div>'}
                 </div>
                 <div class="card-footer">
-                    <button class="control-btn small card-footer-play-btn" title="Play"><i class="fas fa-play"></i></button>
+                    ${track.objectURL ? `<button class="control-btn small card-footer-play-btn" title="Play"><i class="fas fa-play"></i></button>` : `<button class="control-btn small card-search-btn" title="Search on Jamendo"><i class="fas fa-search"></i></button>`}
                     <h5>${truncate(track.title, 40)}</h5>
                 </div>
             </div>
@@ -279,11 +255,10 @@ export async function refreshDiscover() {
 
     try {
         // Fetch from all sources in parallel
-        // We limit to ~10-15 tracks per source to keep it snappy and not overwhelm the grid
+        // Spotify is prioritized at the top
+        const spotifyTracks = await fetchSpotifyTracks();
+
         const promises = [
-            fetchSpotifyGenre('gospel', 5),
-            fetchSpotifyGenre('hip-hop', 5),
-            fetchSpotifyTrending(),
             fetchJamendoTracks().then(tracks => tracks.slice(0, 15)),
             fetchHearThisTracks().then(tracks => tracks.slice(0, 15)),
             fetchLastFMTracks().then(tracks => tracks.slice(0, 10)),
@@ -311,14 +286,9 @@ export async function refreshDiscover() {
             }
         }
 
-        // Shuffle the combined unique list
-        const mixedTracks = shuffleArray(uniqueTracks);
-
-        // Ensure first 5-6 tracks are from Spotify Gospel/HipHop if available
-        let priorityTracks = uniqueTracks.filter(t => t.source === 'spotify').slice(0, 6);
-        let otherTracks = mixedTracks.filter(t => !priorityTracks.some(pt => pt.id === t.id));
-
-        const finalTracks = [...priorityTracks, ...otherTracks];
+        // Shuffle the other sources but keep Spotify at the top
+        const mixedOtherTracks = shuffleArray(uniqueTracks.filter(t => t.source !== 'spotify'));
+        const finalTracks = [...spotifyTracks, ...mixedOtherTracks];
 
         playerContext.discoverTracks = finalTracks;
         saveDiscoverTracks(finalTracks);
@@ -337,35 +307,24 @@ export async function renderDiscoverGrid(query = '', forceRefresh = false) {
     // Check storage first if no query and not forcing a refresh
     if (!query && !forceRefresh) {
         if (loadDiscoverFromStorage()) {
-            renderDiscoverCards(playerContext.discoverTracks);
-            return;
+            // Check if Spotify tracks are present, if not, refresh to get them
+            const hasSpotify = playerContext.discoverTracks.some(t => t.source === 'spotify');
+            if (hasSpotify) {
+                renderDiscoverCards(playerContext.discoverTracks);
+                return;
+            }
         }
     }
 
-    const loadingMessage = query ? `Searching for "${query}"...` : 'Loading popular tracks...';
-    discoverGrid.innerHTML = `<div class="loading-spinner" style="grid-column: 1 / -1;">${loadingMessage}</div>`;
-
-    let tracks = [];
-    if (query) {
-        const spotifyResults = await searchSpotify(query);
-        const jamendoResults = await fetchJamendoTracks(query);
-
-        // Prioritize Spotify results
-        const combined = [...spotifyResults, ...jamendoResults];
-
-        // Deduplicate
-        const seen = new Set();
-        tracks = combined.filter(t => {
-            const key = `${t.title}-${t.artist}`.toLowerCase();
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-    } else {
-        // For Spotify-only testing, use refreshDiscover which CURATES from Spotify
+    if (!query) {
         await refreshDiscover();
         return;
     }
+
+    const loadingMessage = `Searching for "${query}"...`;
+    discoverGrid.innerHTML = `<div class="loading-spinner" style="grid-column: 1 / -1;">${loadingMessage}</div>`;
+
+    let tracks = await fetchJamendoTracks(query);
     renderDiscoverCards(tracks);
 }
 export async function fetchMix(type) {

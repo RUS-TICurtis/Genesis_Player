@@ -6,34 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Genesis Player</title>
   <link rel="icon" type="image/png" href="assets/logo-00.png">
-  <link rel="preconnect" href="https://unpkg.com" />
-  <link rel="dns-prefetch" href="https://unpkg.com" />
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
-  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
-  <link rel="preload" as="image" href="assets/logo.png" />
   <!-- Using CDN for icons to ensure they load -->
-  <link rel="preload" as="style" href="assets/fontawesome/css/all.min.css"
-    onload="this.onload=null;this.rel='stylesheet'">
-  <noscript>
-    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css" />
-  </noscript>
-  <link rel="preload" as="style" href="style.css" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript>
-    <link rel="stylesheet" href="style.css" />
-  </noscript>
+  <link rel="stylesheet" href="assets/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
   <style>
-    html,
-    body {
-      margin: 0;
-      min-height: 100%;
-    }
-
-    .music-player-container {
-      min-height: 100vh;
-    }
-
     /* Drag and Drop Indicator Styles */
     .queue-item.drop-target-top {
       border-top: 2px solid var(--primary-color);
@@ -107,8 +83,8 @@
           </div>
         </div>
 
-        <!-- Settings Link -->
-        <div class="settings-link-container">
+        <!-- Settings & Theme -->
+        <div class="sidebar-footer">
           <div class="theme-switcher-container">
             <i class="fas fa-sun theme-icon"></i>
             <label class="theme-switch">
@@ -117,7 +93,10 @@
             </label>
             <i class="fas fa-moon theme-icon"></i>
           </div>
-          <div class="menu-item" data-target="profile-modal"><i class="fas fa-cog"></i><span>Settings</span></div>
+          <button class="settings-btn" data-target="profile-modal">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+          </button>
         </div>
 
       </div>
@@ -128,20 +107,14 @@
       <!-- Global Top Bar -->
       <div class="search-bar">
         <button id="sidebar-toggle" class="hamburger"><i class="fas fa-bars"></i></button>
-        <i class="fas fa-search mobile-only"></i>
-        <span class="mobile-section-title mobile-only">Songs</span>
-        <i class="fas fa-search desktop-only"></i>
-        <input type="text" id="search-input" placeholder="Search local tracks..." class="desktop-only" />
-        <!-- <div class="header-icons mobile-only">
-          <i class="fas fa-broadcast-tower"></i>
-          <i class="fas fa-ellipsis-v"></i>
-        </div> -->
+        <i class="fas fa-search"></i>
+        <input type="text" id="search-input" placeholder="Search local tracks..." />
         <!-- Search dropdown for live results -->
         <div id="search-dropdown" class="search-dropdown hidden" role="listbox" aria-label="Search results"></div>
         <div class="user-profile">
           <label for="profile-pic-input" class="profile-pic-wrapper" style="cursor: pointer;">
-            <img id="profile-pic" src="assets/profile-default.jpg" alt="Profile" loading="lazy" decoding="async"
-              width="40" height="40" style="width: 100%; height: 100%; object-fit: cover;" />
+            <img id="profile-pic" src="assets/profile-default.jpg" alt="Profile"
+              style="width: 100%; height: 100%; object-fit: cover;" />
             <input type="file" id="profile-pic-input" accept="image/*" hidden />
           </label>
         </div>
@@ -155,8 +128,7 @@
 
         <!-- Welcome Section -->
         <div class="welcome-section">
-          <img src="assets/profile-default.jpg" alt="Profile" class="welcome-profile-pic" loading="eager"
-            decoding="async" fetchpriority="high" width="50" height="50">
+          <img src="assets/profile-default.jpg" alt="Profile" class="welcome-profile-pic">
           <div class="welcome-text">
             <span class="welcome-sub">Welcome,</span>
             <span class="welcome-name">User Name</span>
@@ -188,8 +160,7 @@
         <div class="horizontal-scroll-container" id="home-suggestions-container">
           <!-- Populated by JS -->
           <div class="suggestion-card">
-            <img src="assets/logo.png" alt="Mix" loading="eager" decoding="async" fetchpriority="high" width="320"
-              height="180">
+            <img src="assets/cover-placeholder.png" onerror="this.src='assets/logo.png'" alt="Mix">
             <div class="suggestion-card-overlay">
               <span class="suggestion-card-title">New Music Mix</span>
             </div>
@@ -385,8 +356,7 @@
           <button id="profile-close-btn" class="modal-close-btn"><i class="fas fa-times"></i></button>
           <div class="profile-header" id="profile-header-trigger" style="cursor: pointer;">
             <div class="profile-header-art">
-              <img class="profile-user-img" src="assets/profile-default.jpg" alt="Profile" loading="lazy"
-                decoding="async" width="200" height="200">
+              <img class="profile-user-img" src="assets/profile-default.jpg" alt="Profile">
             </div>
             <div class="profile-header-info">
               <span class="profile-label">Profile</span>
@@ -422,8 +392,7 @@
           <div class="profile-details-body">
             <div class="profile-details-pic-side">
               <div class="large-profile-pic-container" id="edit-profile-pic-trigger">
-                <img id="edit-profile-pic-preview" src="assets/profile-default.jpg" alt="Profile Preview"
-                  loading="lazy" decoding="async" width="180" height="180">
+                <img id="edit-profile-pic-preview" src="assets/profile-default.jpg" alt="Profile Preview">
                 <div class="change-pic-overlay"><i class="fas fa-pencil-alt"></i> Choose photo</div>
               </div>
               <input type="file" id="edit-profile-pic-input" accept="image/*" hidden>
@@ -491,7 +460,7 @@
     </div>
     <div class="panel-content">
       <div id="extended-info-art" class="extended-album-art">
-        <img src="assets/logo.png" alt="Album Art" loading="lazy" decoding="async" width="320" height="320">
+        <img src="assets/logo.png" alt="Album Art">
       </div>
       <div id="extended-info-details" class="extended-track-details">
         <h3 id="extended-info-title">Track Title</h3>
@@ -628,7 +597,7 @@
     <!-- Left Side: Track Info -->
     <div id="playback-bar-track-info" class="playback-track-info">
       <div class="playback-album-art">
-        <img id="album-art-img" class="hidden" alt="Album Art" width="56" height="56" />
+        <img id="album-art-img" class="hidden" alt="Album Art" />
         <div id="album-art-placeholder" class="placeholder-icon">
           <i class="fas fa-music"></i>
         </div>
@@ -661,17 +630,8 @@
 
     <!-- Right Side: Volume & Other Controls -->
     <div class="playback-extra-controls">
-      <div class="mobile-play-container">
-        <svg class="circular-progress" viewBox="0 0 36 36">
-          <path class="circular-progress-bg"
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-          <path id="mobile-circular-progress-fill" class="circular-progress-fill" stroke-dasharray="100, 100"
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-        </svg>
-        <button class="control-btn mobile-play-btn" id="mobile-play-btn">
-          <i class="fas fa-play" id="mobile-play-icon"></i>
-        </button>
-      </div>
+      <button class="control-btn mobile-play-btn" id="mobile-play-btn"><i class="fas fa-play"
+          id="mobile-play-icon"></i></button>
       <div class="volume-control-container">
         <button class="control-btn" id="volume-btn" title="Volume"><i class="fas fa-volume-up"
             id="volume-icon"></i></button>
@@ -685,9 +645,9 @@
   </div>
 
   <!-- <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.11/dist/music-metadata-browser.min.js"></script> -->
-  <script defer src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.10/dist/music-metadata-browser.min.js"></script>
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+  <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/music-metadata-browser@2.5.10/dist/music-metadata-browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 
   <script type="module" src="js/script.js"></script>
   <script>
