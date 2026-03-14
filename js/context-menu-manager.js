@@ -30,7 +30,7 @@ export function renderTrackContextMenu(trackId, buttonElement, options = {}) {
     const menu = document.createElement('div');
     menu.className = 'context-menu';
 
-    const track = playerContext.libraryTracks.find(t => t.id === trackId);
+    const track = playerContext.libraryTracksMap.get(trackId);
     if (!track) return;
 
     const menuItems = [];
@@ -100,7 +100,7 @@ export function renderTrackContextMenu(trackId, buttonElement, options = {}) {
 
 async function handleContextMenuAction(action, trackId, options, track) {
     // Re-find track to be sure
-    const currentTrack = playerContext.libraryTracks.find(t => t.id === trackId) || track;
+    const currentTrack = playerContext.libraryTracksMap.get(trackId) || track;
 
     switch (action) {
         case 'play':

@@ -37,24 +37,31 @@ function addToHistory(track) {
     }
 }
 
-// Helpers to access DOM elements dynamically or cached
-function getAudioPlayer() { return document.getElementById('audio-player'); }
-function getProgressFill() { return document.getElementById('progress-fill'); }
-function getProgressHead() { return document.getElementById('progress-head'); }
-function getCurrentTimeEl() { return document.getElementById('current-time'); }
-function getDurationEl() { return document.getElementById('duration'); }
-function getVolumeSlider() { return document.getElementById('volume-slider'); }
-// ... (keep getters)
-function getVolumePercentage() { return document.getElementById('volume-percentage'); }
-function getVolumeIcon() { return document.getElementById('volume-icon'); }
-function getMuteBtn() { return document.getElementById('mute-btn'); }
-function getPlayIcon() { return document.getElementById('play-icon'); }
-function getShuffleBtn() { return document.getElementById('shuffle-btn'); }
-function getRepeatBtn() { return document.getElementById('repeat-btn'); }
-function getSongTitle() { return document.getElementById('song-title'); }
-function getArtistName() { return document.getElementById('artist-name'); }
-function getAlbumArtImg() { return document.getElementById('album-art-img'); }
-function getAlbumArtPlaceholder() { return document.getElementById('album-art-placeholder'); }
+// DOM element caching
+const cachedElements = {};
+function getEl(id) {
+    if (!cachedElements[id]) {
+        cachedElements[id] = document.getElementById(id);
+    }
+    return cachedElements[id];
+}
+
+function getAudioPlayer() { return getEl('audio-player'); }
+function getProgressFill() { return getEl('progress-fill'); }
+function getProgressHead() { return getEl('progress-head'); }
+function getCurrentTimeEl() { return getEl('current-time'); }
+function getDurationEl() { return getEl('duration'); }
+function getVolumeSlider() { return getEl('volume-slider'); }
+function getVolumePercentage() { return getEl('volume-percentage'); }
+function getVolumeIcon() { return getEl('volume-icon'); }
+function getMuteBtn() { return getEl('mute-btn'); }
+function getPlayIcon() { return getEl('play-icon'); }
+function getShuffleBtn() { return getEl('shuffle-btn'); }
+function getRepeatBtn() { return getEl('repeat-btn'); }
+function getSongTitle() { return getEl('song-title'); }
+function getArtistName() { return getEl('artist-name'); }
+function getAlbumArtImg() { return getEl('album-art-img'); }
+function getAlbumArtPlaceholder() { return getEl('album-art-placeholder'); }
 
 export async function restorePlaybackState() {
     const savedState = localStorage.getItem(PLAYBACK_STATE_KEY);
@@ -75,7 +82,7 @@ export async function restorePlaybackState() {
         // Restore Queue
         if (queueIds && queueIds.length > 0) {
             playerContext.trackQueue = queueIds.map(id =>
-                playerContext.libraryTracks.find(t => t.id === id) ||
+                playerContext.libraryTracksMap.get(id) ||
                 playerContext.discoverTracks.find(t => t.id === id)
             ).filter(Boolean);
         }
@@ -92,6 +99,9 @@ export async function restorePlaybackState() {
             const track = playerContext.trackQueue[restoredIndex];
 
             if (audioPlayer && track) {
+                if (!track.objectURL && track.audioBlob) {
+                    track.objectURL = URL.createObjectURL(track.audioBlob);
+                }
                 audioPlayer.src = track.objectURL;
                 audioPlayer.volume = volume !== undefined ? volume : 1;
 
@@ -129,9 +139,13 @@ export async function restorePlaybackState() {
     }
 }
 
-export function savePlaybackState() {
+let lastSaveTime = 0;
+export function savePlaybackState(force = false) {
+    const now = Date.now();
+    if (!force && now - lastSaveTime < 2000) return; // Throttle to 2 seconds
+
     const audioPlayer = getAudioPlayer();
-    if (playerContext.currentTrackIndex < 0 || !playerContext.trackQueue[playerContext.currentTrackIndex]) {
+    if (!audioPlayer || playerContext.currentTrackIndex < 0 || !playerContext.trackQueue[playerContext.currentTrackIndex]) {
         localStorage.removeItem(PLAYBACK_STATE_KEY);
         return;
     }
@@ -144,6 +158,7 @@ export function savePlaybackState() {
         repeatState: playerContext.repeatState,
     };
     localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(state));
+    lastSaveTime = now;
 }
 
 export function updatePlaybackBar(track) {
@@ -162,7 +177,7 @@ export function updatePlaybackBar(track) {
     }
 
     if (songTitle) songTitle.textContent = truncate(track.title || 'Unknown Title', 40);
-    if (artistName) artistName.textContent = truncate(track.album || (track.isURL ? 'Web Stream' : 'Unknown Album'), 20);
+    if (artistName) artistName.textContent = truncate(track.artist || (track.isURL ? 'Web Stream' : 'Unknown Artist'), 20);
 
     const imgUrl = track.coverURL || getFallbackImage(track.id, track.title);
     if (artImg) { artImg.src = imgUrl; artImg.classList.remove('hidden'); }
@@ -202,16 +217,6 @@ export function updateProgressBarUI(currentTime, duration) {
     if (fill) fill.style.width = `${pct}%`;
     if (head) head.style.left = `${pct}%`;
     if (mobileFill) mobileFill.style.width = `${pct}%`;
-
-    // Circular Progress
-    const circularFill = document.getElementById('mobile-circular-progress-fill');
-    if (circularFill) {
-        // stroke-dasharray is 100, 100. offset 0 is full, offset 100 is empty.
-        // Wait, dashoffset works differently depending on how it's set.
-        // Let's use dasharray = "pct, 100" actually, it's easier.
-        circularFill.setAttribute('stroke-dasharray', `${pct}, 100`);
-    }
-
     if (currEl) currEl.textContent = formatTime(currentTime);
     if (durEl) durEl.textContent = formatTime(duration);
 }
@@ -228,30 +233,25 @@ export function getTimeHandler() {
     };
 }
 
-export async function loadTrack(index, autoPlay = true) {
+export function loadTrack(index, autoPlay = true) {
     const audioPlayer = getAudioPlayer();
+
+    // Memory cleanup: Revoke objectURL of current track before switching
+    if (playerContext.currentTrackIndex !== -1) {
+        const currentTrack = playerContext.trackQueue[playerContext.currentTrackIndex];
+        if (currentTrack && currentTrack.objectURL && currentTrack !== playerContext.trackQueue[index]) {
+            URL.revokeObjectURL(currentTrack.objectURL);
+            currentTrack.objectURL = null;
+        }
+    }
+
     playerContext.currentTrackIndex = index;
     const track = playerContext.trackQueue[index];
 
     if (track) {
-        // If it's a Spotify track or has no objectURL but is from a web source
-        if (!track.objectURL && (track.source === 'spotify' || track.source === 'lastfm' || track.source === 'audiodb' || track.source === 'musicbrainz')) {
-            try {
-                showMessage(`Resolving stream for "${track.title}"...`);
-                const resolveRes = await fetch(`/api/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
-                const resolveData = await resolveRes.json();
-                if (resolveData.url) {
-                    track.objectURL = resolveData.url;
-                    track.source = resolveData.source || track.source; // Keep track of actual source
-                } else {
-                    showMessage(`No stream found for "${track.title}". Reverting to library/other sources.`);
-                    return;
-                }
-            } catch (e) {
-                console.error("Resolve error", e);
-                showMessage("Stream resolution failed.");
-                return;
-            }
+        // Lazy load the objectURL if it doesn't exist
+        if (!track.objectURL && track.audioBlob) {
+            track.objectURL = URL.createObjectURL(track.audioBlob);
         }
         audioPlayer.src = track.objectURL;
     }
@@ -320,7 +320,7 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
 
     let newQueue = tracksOrIds.map(item => {
         if (typeof item === 'string') {
-            return playerContext.libraryTracks.find(t => t.id === item) || playerContext.discoverTracks.find(t => t.id === item);
+            return playerContext.libraryTracksMap.get(item) || playerContext.discoverTracks.find(t => t.id === item);
         }
         return item;
     }).filter(Boolean);
@@ -330,10 +330,13 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
         return;
     }
 
-    // If we are selecting from a single click, targetTrack is what we want.
+    // Check if we are selecting the currently playing track from a single click
+    // If tracksOrIds contains just one item (or we are starting a list at a specific index),
+    // and that item is the currently playing track, we should just toggle play/pause.
     const targetTrack = newQueue[startIndex];
     if (playerContext.currentTrackIndex !== -1 && playerContext.trackQueue[playerContext.currentTrackIndex]) {
         const currentId = playerContext.trackQueue[playerContext.currentTrackIndex].id;
+        // If we are just clicking "play" on a single track card or row which is already active
         if (tracksOrIds.length === 1 && targetTrack.id === currentId && !shuffle) {
             if (playerContext.isPlaying) {
                 pauseTrack();
@@ -343,6 +346,9 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
             return;
         }
     }
+
+    const discoverTracksInQueue = newQueue.filter(t => t.isFromDiscover);
+    playerContext.trackQueue.unshift(...discoverTracksInQueue.filter(dt => !playerContext.trackQueue.some(qt => qt.id === dt.id)));
 
     if (shuffle) {
         for (let i = newQueue.length - 1; i > 0; i--) {
@@ -495,21 +501,5 @@ export function initProgressBarListeners() {
         isDragging = false;
     });
 
-    progressBarContainer.addEventListener('touchstart', (e) => {
-        isDragging = true;
-        seek(e);
-        e.preventDefault();
-    }, { passive: false });
-
-    progressBarContainer.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        seek(e);
-        e.preventDefault();
-    }, { passive: false });
-
-    const stopDragging = () => {
-        isDragging = false;
-    };
-    document.addEventListener('touchend', stopDragging, { passive: true });
-    document.addEventListener('touchcancel', stopDragging, { passive: true });
+    // ... touch events ...
 }

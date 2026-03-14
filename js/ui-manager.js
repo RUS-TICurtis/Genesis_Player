@@ -1,36 +1,46 @@
 import { playerContext } from './state.js';
 import { formatTime, truncate } from './utils.js';
 
+// DOM element caching
+const cachedElements = {};
+function getCached(id, selector = null) {
+    const key = id || selector;
+    if (!cachedElements[key]) {
+        cachedElements[key] = id ? document.getElementById(id) : document.querySelectorAll(selector);
+    }
+    return cachedElements[key];
+}
+
 // DOM Elements Helpers
 export const elements = {
-    msgText: () => document.getElementById('modal-text'),
-    msgModal: () => document.getElementById('message-modal'),
-    confirmModal: () => document.getElementById('confirm-modal'),
-    confirmModalTitle: () => document.getElementById('confirm-modal-title'),
-    confirmModalText: () => document.getElementById('confirm-modal-text'),
-    confirmOkBtn: () => document.getElementById('confirm-ok-btn'),
-    confirmCancelBtn: () => document.getElementById('confirm-cancel-btn'),
-    mainSections: () => document.querySelectorAll('.main-section'),
-    albumDetailView: () => document.getElementById('album-detail-view'),
-    artistDetailView: () => document.getElementById('artist-detail-view'),
-    menuItems: () => document.querySelectorAll('.menu-item'),
-    bottomNavItems: () => document.querySelectorAll('.bottom-nav .nav-item'),
-    selectionCount: () => document.getElementById('selection-count'),
-    selectionBar: () => document.getElementById('selection-action-bar'),
-    themeToggle: () => document.getElementById('theme-toggle-checkbox'),
-    libraryGrid: () => document.getElementById('library-grid'),
-    libraryGridViewBtn: () => document.getElementById('library-grid-view-btn'),
-    libraryListViewBtn: () => document.getElementById('library-list-view-btn'),
-    extendedInfoPanel: () => document.getElementById('extended-info-panel'),
-    mainContent: () => document.querySelector('.main-content'),
-    searchDropdown: () => document.getElementById('search-dropdown'),
-    searchInput: () => document.getElementById('search-input'),
-    inputModal: () => document.getElementById('input-modal'),
-    inputModalTitle: () => document.getElementById('input-modal-title'),
-    inputModalLabel: () => document.getElementById('input-modal-label'),
-    inputModalField: () => document.getElementById('generic-input-field'),
-    inputModalOkBtn: () => document.getElementById('input-modal-ok-btn'),
-    inputModalCancelBtn: () => document.getElementById('input-modal-cancel-btn'),
+    msgText: () => getCached('modal-text'),
+    msgModal: () => getCached('message-modal'),
+    confirmModal: () => getCached('confirm-modal'),
+    confirmModalTitle: () => getCached('confirm-modal-title'),
+    confirmModalText: () => getCached('confirm-modal-text'),
+    confirmOkBtn: () => getCached('confirm-ok-btn'),
+    confirmCancelBtn: () => getCached('confirm-cancel-btn'),
+    mainSections: () => getCached(null, '.main-section'),
+    albumDetailView: () => getCached('album-detail-view'),
+    artistDetailView: () => getCached('artist-detail-view'),
+    menuItems: () => getCached(null, '.menu-item, .settings-btn'),
+    bottomNavItems: () => getCached(null, '.bottom-nav .nav-item'),
+    selectionCount: () => getCached('selection-count'),
+    selectionBar: () => getCached('selection-action-bar'),
+    themeToggle: () => getCached('theme-toggle-checkbox'),
+    libraryGrid: () => getCached('library-grid'),
+    libraryGridViewBtn: () => getCached('library-grid-view-btn'),
+    libraryListViewBtn: () => getCached('library-list-view-btn'),
+    extendedInfoPanel: () => getCached('extended-info-panel'),
+    mainContent: () => document.querySelector('.main-content'), // Selector might match different things or be too dynamic? Keep it or cache it.
+    searchDropdown: () => getCached('search-dropdown'),
+    searchInput: () => getCached('search-input'),
+    inputModal: () => getCached('input-modal'),
+    inputModalTitle: () => getCached('input-modal-title'),
+    inputModalLabel: () => getCached('input-modal-label'),
+    inputModalField: () => getCached('generic-input-field'),
+    inputModalOkBtn: () => getCached('input-modal-ok-btn'),
+    inputModalCancelBtn: () => getCached('input-modal-cancel-btn'),
 };
 
 export function showMessage(msg) {
@@ -113,16 +123,7 @@ export function switchSection(targetId, detailId = null) {
 
     const items = [...elements.menuItems(), ...elements.bottomNavItems()];
     items.forEach(item => {
-        const isActive = item.dataset.target === targetId;
-        item.classList.toggle('active', isActive);
-        if (isActive && window.innerWidth <= 768) {
-            const mobileTitle = document.querySelector('.mobile-section-title');
-            if (mobileTitle) {
-                // Get span text from the item
-                const label = item.querySelector('span')?.textContent || 'Genesis';
-                mobileTitle.textContent = label;
-            }
-        }
+        item.classList.toggle('active', item.dataset.target === targetId);
     });
 
     // Persist UI State
@@ -201,9 +202,7 @@ export function renderSearchDropdown(highlightedSearchIndex = -1) {
     }
 
     const results = playerContext.libraryTracks
-        .filter(track =>
-            (track.title && track.title.toLowerCase().includes(query)) ||
-            (track.artist && track.artist.toLowerCase().includes(query)))
+        .filter(track => track.searchStr?.includes(query))
         .slice(0, 10);
 
     if (results.length === 0) {
@@ -241,40 +240,43 @@ export function updateSearchHighlight(items, highlightedSearchIndex) {
     });
 }
 
+let lastPlayingTrackId = null;
 export function updateGlobalPlayingState(trackId) {
-    // Remove from all previous
-    document.querySelectorAll('.currently-playing').forEach(el => el.classList.remove('currently-playing'));
-    if (!trackId) return;
-    // Add to all matches (rows in lists/queue and cards in home/discover)
-    const selectors = [
-        `.track-list-row[data-id="${trackId}"]`,
-        `.recent-media-card[data-track-id="${trackId}"]`
-    ];
-    document.querySelectorAll(selectors.join(',')).forEach(el => {
-        el.classList.add('currently-playing');
-    });
-
-    // Update icons globally
-    // 1. Reset all play buttons to 'play' icon
-    document.querySelectorAll('.row-play-btn i, .card-footer-play-btn i').forEach(icon => {
-        icon.className = 'fas fa-play';
-        icon.parentElement.title = "Play";
-    });
-
-    // 2. Set active track buttons to correct state
-    if (trackId) {
-        document.querySelectorAll(selectors.join(',')).forEach(el => {
-            const btn = el.querySelector('.row-play-btn i, .card-footer-play-btn i');
-            if (btn) {
-                // We need to check if we are playing or paused. We need access to playerContext.isPlaying
-                // Import playerContext here? or pass it in?
-                // Ideally this function should just check the global state.
-                // We will rely on import from state.js.
-                import('./state.js').then(({ playerContext }) => {
-                    btn.className = playerContext.isPlaying ? 'fas fa-pause' : 'fas fa-play';
-                    btn.parentElement.title = playerContext.isPlaying ? "Pause" : "Play";
-                });
+    // 1. Remove 'currently-playing' and reset icons for the PREVIOUS track only
+    if (lastPlayingTrackId && lastPlayingTrackId !== trackId) {
+        const prevSelectors = [
+            `.track-list-row[data-id="${lastPlayingTrackId}"]`,
+            `.recent-media-card[data-track-id="${lastPlayingTrackId}"]`
+        ];
+        document.querySelectorAll(prevSelectors.join(',')).forEach(el => {
+            el.classList.remove('currently-playing');
+            const icon = el.querySelector('.row-play-btn i, .card-footer-play-btn i');
+            if (icon) {
+                icon.className = 'fas fa-play';
+                icon.parentElement.title = "Play";
             }
         });
     }
+
+    if (!trackId) {
+        lastPlayingTrackId = null;
+        return;
+    }
+
+    // 2. Add to all matches for the CURRENT track
+    const currentSelectors = [
+        `.track-list-row[data-id="${trackId}"]`,
+        `.recent-media-card[data-track-id="${trackId}"]`
+    ];
+
+    document.querySelectorAll(currentSelectors.join(',')).forEach(el => {
+        el.classList.add('currently-playing');
+        const icon = el.querySelector('.row-play-btn i, .card-footer-play-btn i');
+        if (icon) {
+            icon.className = playerContext.isPlaying ? 'fas fa-pause' : 'fas fa-play';
+            icon.parentElement.title = playerContext.isPlaying ? "Pause" : "Play";
+        }
+    });
+
+    lastPlayingTrackId = trackId;
 }

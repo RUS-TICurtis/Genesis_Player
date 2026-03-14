@@ -54,8 +54,14 @@
 
 .menu-item:hover,
 .menu-item.active {
-    background-color: rgba(108, 92, 231, 0.1);
+    background-color: var(--primary-color-surface);
     color: var(--primary-color);
+}
+
+.menu-item.active {
+    font-weight: 600;
+    box-shadow: inset 4px 0 0 var(--primary-color);
+    border-radius: 0 8px 8px 0;
 }
 
 .playlist-section {
@@ -159,14 +165,16 @@ body.dark-theme .open-btn {
 }
 
 .sidebar-playlist-item:hover {
-    background-color: rgba(108, 92, 231, 0.1);
+    background-color: var(--primary-color-surface);
     color: var(--primary-color);
 }
 
 .sidebar-playlist-item.active {
-    background-color: rgba(108, 92, 231, 0.1);
+    background-color: var(--primary-color-surface);
     color: var(--primary-color);
     font-weight: 600;
+    box-shadow: inset 4px 0 0 var(--primary-color);
+    border-radius: 0 8px 8px 0;
 }
 
 /* Bottom Navigation (Mobile Only) - Note: Queue link added */
@@ -184,12 +192,40 @@ body.dark-theme .open-btn {
     color: var(--text-color);
 }
 
-/* Settings & Theme Switcher */
-.settings-link-container {
+/* Sidebar Footer (Settings & Theme) */
+.sidebar-footer {
     margin-top: auto;
-    /* Pushes to the bottom */
-    padding: 10px 20px 20px;
+    padding: 15px 20px;
     border-top: 1px solid var(--text-light);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.settings-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px;
+    background-color: var(--light-color);
+    border: 1px solid var(--text-light);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.settings-btn:hover {
+    background-color: var(--primary-color-surface);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.settings-btn i {
+    font-size: 18px;
 }
 
 /* --- Theme Switcher --- */
@@ -198,8 +234,7 @@ body.dark-theme .open-btn {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    padding: 10px 0;
-    margin-bottom: 10px;
+    padding: 5px 0;
 }
 
 .theme-switcher-container .theme-icon {
