@@ -74,7 +74,7 @@ function getPlaylistArtHTML(playlist) {
     // Find up to 4 tracks with unique artwork
     const seenArt = new Set();
     for (const id of trackIds) {
-        const track = playerContext.libraryTracks.find(t => t.id === id);
+        const track = playerContext.libraryTracksMap.get(id);
         if (track && track.coverURL && !seenArt.has(track.coverURL)) {
             tracksWithArt.push(track);
             seenArt.add(track.coverURL);

@@ -2,6 +2,7 @@ import db from './db.js';
 
 export const playerContext = {
     libraryTracks: [],
+    libraryTracksMap: new Map(),
     discoverTracks: [], // For tracks from APIs like Jamendo
     trackQueue: [],
     currentTrackIndex: -1,
@@ -10,4 +11,6 @@ export const playerContext = {
     selectedTrackIds: new Set(),
     repeatState: 0, // 0: no-repeat, 1: repeat-all, 2: repeat-one
     dbInstance: db, // Use the Dexie instance
+    cachedArtists: [],
+    cachedAlbums: [],
 };

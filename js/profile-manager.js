@@ -97,31 +97,24 @@ function renderTopArtists() {
     const grid = document.getElementById('profile-top-artists-grid');
     if (!grid) return;
 
-    // Get all artists from library
-    const artistCounts = {};
-    playerContext.libraryTracks.forEach(track => {
-        if (track.artist) {
-            artistCounts[track.artist] = (artistCounts[track.artist] || 0) + 1;
-        }
-    });
+    // Use cached artists, sorted by track count for "Top"
+    const topArtists = [...playerContext.cachedArtists]
+        .sort((a, b) => b.trackIds.length - a.trackIds.length)
+        .slice(0, 6);
 
-    // Sort by count
-    const sortedArtists = Object.keys(artistCounts).sort((a, b) => artistCounts[b] - artistCounts[a]).slice(0, 6);
-
-    if (sortedArtists.length === 0) {
+    if (topArtists.length === 0) {
         grid.innerHTML = '<div class="empty-state">No artists in your library yet.</div>';
         return;
     }
 
-    grid.innerHTML = sortedArtists.map(artist => {
-        const track = playerContext.libraryTracks.find(t => t.artist === artist && t.coverURL);
-        const imgUrl = track ? track.coverURL : getFallbackImage(artist);
+    grid.innerHTML = topArtists.map(artist => {
+        const imgUrl = artist.coverURL || getFallbackImage(artist.name);
         return `
-            <div class="profile-artist-card" data-artist="${artist}">
+            <div class="profile-artist-card" data-artist="${artist.name}">
                 <div class="profile-artist-art">
-                    <img src="${imgUrl}" alt="${artist}">
+                    <img src="${imgUrl}" alt="${artist.name}">
                 </div>
-                <div class="profile-artist-name">${truncate(artist, 20)}</div>
+                <div class="profile-artist-name">${truncate(artist.name, 20)}</div>
                 <div class="profile-artist-label">Artist</div>
             </div>
         `;

@@ -20,12 +20,9 @@ export async function loadLibraryFromDB() {
             const restorationPromises = storedTracks.map(async (track) => {
                 let trackData = { ...track, objectURL: null };
 
-                if (track.audioBlob) {
-                    trackData.objectURL = URL.createObjectURL(track.audioBlob);
-                    // Create a fresh objectURL for the cover art from its blob
-                    if (track.coverBlob) {
-                        trackData.coverURL = URL.createObjectURL(track.coverBlob);
-                    }
+                // Lazy load audio URLs, but eager load cover art for UI
+                if (track.coverBlob) {
+                    trackData.coverURL = URL.createObjectURL(track.coverBlob);
                 }
 
                 // Parse lyrics if they exist
@@ -36,9 +33,9 @@ export async function loadLibraryFromDB() {
             });
 
             playerContext.libraryTracks = await Promise.all(restorationPromises);
-            // Default play queue to component library is usually done in main script or here?
-            // "playerContext.trackQueue = [...playerContext.libraryTracks];" 
-            // We'll leave queue management to playback restoration logic or initial set up.
+            playerContext.libraryTracksMap = new Map(playerContext.libraryTracks.map(t => [t.id, t]));
+
+            updateLibraryCaches();
 
             renderHomeGrid();
             renderLibraryGrid();
@@ -77,13 +74,14 @@ export async function handleFiles(fileList, options = {}) {
             return true;
         });
 
-        // Step 1: Extract Metadata (Outside Transaction)
+        // Step 1: Extract Metadata in Parallel (Outside Transaction)
+        const concurrencyLimit = 5;
         const detailedTracks = [];
-        for (const file of audioFiles) {
+
+        const processFile = async (file) => {
             try {
                 const metadata = await extractMetadata(file);
                 if (metadata) {
-                    // Fetch genre from API if missing or generic
                     if (!metadata.genre || metadata.genre === 'Unknown Genre') {
                         try {
                             const genreRes = await fetch(`/api/genre?title=${encodeURIComponent(metadata.title)}&artist=${encodeURIComponent(metadata.artist)}`);
@@ -97,41 +95,57 @@ export async function handleFiles(fileList, options = {}) {
                             console.warn("Failed to fetch genre from API", apiErr);
                         }
                     }
-
-                    detailedTracks.push({
-                        ...metadata,
-                        audioBlob: file
-                    });
+                    return { ...metadata, audioBlob: file };
                 }
             } catch (err) {
                 console.error(`Failed to extract metadata for: ${file.name}`, err);
             }
+            return null;
+        };
+
+        for (let i = 0; i < audioFiles.length; i += concurrencyLimit) {
+            const batch = audioFiles.slice(i, i + concurrencyLimit);
+            const results = await Promise.all(batch.map(processFile));
+            detailedTracks.push(...results.filter(Boolean));
         }
 
-        // Step 2: Database Storage (Inside Transaction)
-        await db.transaction('rw', db.tracks, async () => {
-            for (const trackForDB of detailedTracks) {
-                try {
-                    await db.tracks.put(trackForDB);
+        // Step 2: Database Storage (Bulk Put)
+        if (detailedTracks.length > 0) {
+            try {
+                await db.tracks.bulkPut(detailedTracks);
 
-                    // Update Memory State (only if DB write succeeds)
-                    const trackForMemory = { ...trackForDB, objectURL: URL.createObjectURL(trackForDB.audioBlob) };
+                detailedTracks.forEach(trackForDB => {
+                    // Update Memory State (Lazy load audio objectURL)
+                    const trackForMemory = { ...trackForDB, objectURL: null };
                     if (trackForMemory.coverBlob) {
                         trackForMemory.coverURL = URL.createObjectURL(trackForMemory.coverBlob);
                     }
                     newTracksForMemory.push(trackForMemory);
-                } catch (err) {
-                    if (err.name === 'ConstraintError') {
-                        console.warn(`Skipping duplicate track in DB: ${trackForDB.title}`);
-                    } else {
-                        console.error(`Failed to save track to DB: ${trackForDB.title}`, err);
+                });
+            } catch (err) {
+                console.error("Bulk database write failed, falling back to individual puts", err);
+                // Fallback to individual puts if bulk fails (e.g. one track is too large for a single transaction)
+                for (const trackForDB of detailedTracks) {
+                    try {
+                        await db.tracks.put(trackForDB);
+                        const trackForMemory = { ...trackForDB, objectURL: null };
+                        if (trackForMemory.coverBlob) {
+                            trackForMemory.coverURL = URL.createObjectURL(trackForMemory.coverBlob);
+                        }
+                        newTracksForMemory.push(trackForMemory);
+                    } catch (individualErr) {
+                        console.error(`Failed to save track individually: ${trackForDB.title}`, individualErr);
                     }
                 }
             }
-        });
+        }
 
         if (newTracksForMemory.length > 0) {
             playerContext.libraryTracks.push(...newTracksForMemory);
+            newTracksForMemory.forEach(t => playerContext.libraryTracksMap.set(t.id, t));
+
+            updateLibraryCaches();
+
             const totalFiles = audioFiles.length;
             const successCount = newTracksForMemory.length;
             const failCount = totalFiles - successCount;
@@ -156,11 +170,23 @@ export async function handleFiles(fileList, options = {}) {
 }
 
 export async function removeTrack(id) {
+    const track = playerContext.libraryTracksMap.get(id);
+    if (track) {
+        if (track.objectURL) URL.revokeObjectURL(track.objectURL);
+        if (track.coverURL && !track.coverURL.startsWith('assets/')) {
+            URL.revokeObjectURL(track.coverURL);
+        }
+    }
+
     await db.tracks.delete(id);
     const index = playerContext.libraryTracks.findIndex(t => t.id === id);
     if (index > -1) {
         playerContext.libraryTracks.splice(index, 1);
     }
+    playerContext.libraryTracksMap.delete(id);
+
+    updateLibraryCaches();
+
     renderHomeGrid();
     renderLibraryGrid();
     if (window.refreshLibraryViews) window.refreshLibraryViews();
@@ -170,6 +196,50 @@ export async function handleRemoveTrack(trackId) {
     // Assumption: callers handle playback stop if needed, or we implement checking here later
     // For now, this is a direct database removal.
     await removeTrack(trackId);
+}
+
+export function updateLibraryCaches() {
+    const tracks = playerContext.libraryTracks;
+
+    // Update cached artists
+    const artistsMap = new Map();
+    tracks.forEach(t => {
+        const artistName = t.artist || 'Unknown Artist';
+        if (!artistsMap.has(artistName)) {
+            artistsMap.set(artistName, {
+                name: artistName,
+                coverURL: null,
+                trackIds: []
+            });
+        }
+        const artistData = artistsMap.get(artistName);
+        artistData.trackIds.push(t.id);
+        if (t.coverURL && !artistData.coverURL) {
+            artistData.coverURL = t.coverURL;
+        }
+    });
+    playerContext.cachedArtists = [...artistsMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    // Update cached albums
+    const albumsMap = new Map();
+    tracks.forEach(t => {
+        if (t.album) {
+            const albumKey = `${t.album}|${t.artist || 'Unknown Artist'}`;
+            if (!albumsMap.has(albumKey)) {
+                albumsMap.set(albumKey, {
+                    name: t.album,
+                    artist: t.artist || 'Unknown Artist',
+                    coverURL: t.coverURL,
+                    trackIds: []
+                });
+            }
+            albumsMap.get(albumKey).trackIds.push(t.id);
+            if (t.coverURL && !albumsMap.get(albumKey).coverURL) {
+                albumsMap.get(albumKey).coverURL = t.coverURL;
+            }
+        }
+    });
+    playerContext.cachedAlbums = [...albumsMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function renderHomeGrid() {
@@ -208,8 +278,8 @@ function renderTopArtists() {
     const container = document.getElementById('home-top-artists-container');
     if (!container) return;
 
-    // Get unique artists from library
-    const artists = [...new Set(playerContext.libraryTracks.map(t => t.artist).filter(Boolean))].slice(0, 6);
+    // Use cached artists
+    const artists = playerContext.cachedArtists.slice(0, 6);
 
     if (artists.length === 0) {
         container.innerHTML = '<div style="padding:10px; color:var(--text-color);">No artists found</div>';
@@ -217,15 +287,13 @@ function renderTopArtists() {
     }
 
     container.innerHTML = artists.map(artist => {
-        // Find a representative track for image
-        const track = playerContext.libraryTracks.find(t => t.artist === artist && t.coverURL);
-        const imgUrl = track ? track.coverURL : getFallbackImage(artist);
+        const imgUrl = artist.coverURL || getFallbackImage(artist.name);
         return `
-            <div class="artist-circle-card" data-artist="${artist}">
+            <div class="artist-circle-card" data-artist="${artist.name}">
                 <div class="artist-img-container">
-                    <img src="${imgUrl}" alt="${artist}" loading="lazy">
+                    <img src="${imgUrl}" alt="${artist.name}" loading="lazy">
                 </div>
-                <span class="artist-name">${truncate(artist, 20)}</span>
+                <span class="artist-name">${truncate(artist.name, 20)}</span>
             </div>
         `;
     }).join('');
@@ -242,29 +310,22 @@ function renderTopAlbums() {
     const container = document.getElementById('home-top-albums-container');
     if (!container) return;
 
-    // Get unique albums
-    const albums = [];
-    const seen = new Set();
-    playerContext.libraryTracks.forEach(t => {
-        if (t.album && !seen.has(t.album)) {
-            seen.add(t.album);
-            albums.push(t);
-        }
-    });
+    // Use cached albums
+    const albums = playerContext.cachedAlbums.slice(0, 6);
 
     if (albums.length === 0) {
         container.innerHTML = '<div style="padding:10px; color:var(--text-color);">No albums found</div>';
         return;
     }
 
-    container.innerHTML = albums.slice(0, 6).map(track => {
+    container.innerHTML = albums.map(album => {
         return `
-            <div class="album-square-card" data-album="${track.album}" data-artist="${track.artist || ''}">
+            <div class="album-square-card" data-album="${album.name}" data-artist="${album.artist}">
                 <div class="album-img-wrapper">
-                    <img src="${track.coverURL || getFallbackImage(track.album)}" alt="${track.album}" loading="lazy">
+                    <img src="${album.coverURL || getFallbackImage(album.name)}" alt="${album.name}" loading="lazy">
                 </div>
-                <span class="card-title-text">${truncate(track.album, 20)}</span>
-                <span class="card-subtitle-text">${truncate(track.artist || 'Unknown', 20)}</span>
+                <span class="card-title-text">${truncate(album.name, 20)}</span>
+                <span class="card-subtitle-text">${truncate(album.artist, 20)}</span>
             </div>
         `;
     }).join('');
@@ -280,27 +341,43 @@ function renderRecentArtists() {
     const container = document.getElementById('home-recent-artists-container');
     if (!container) return;
 
-    // Just grab distinct artists from recent tracks (reverse order)
-    const recent = [...playerContext.libraryTracks].reverse();
-    const artists = [...new Set(recent.map(t => t.artist).filter(Boolean))].slice(0, 10);
+    // Just grab distinct artists from recent tracks (reverse order of libraryTracks)
+    const recentTracks = [...playerContext.libraryTracks].reverse();
+    const seen = new Set();
+    const recentArtists = [];
 
-    if (artists.length === 0) {
+    for (const t of recentTracks) {
+        const artistName = t.artist || 'Unknown Artist';
+        if (!seen.has(artistName)) {
+            seen.add(artistName);
+            const artistData = playerContext.cachedArtists.find(a => a.name === artistName);
+            if (artistData) recentArtists.push(artistData);
+            if (recentArtists.length === 10) break;
+        }
+    }
+
+    if (recentArtists.length === 0) {
         container.innerHTML = '<div style="padding:10px; color:var(--text-color);">No recent artists</div>';
         return;
     }
 
-    container.innerHTML = artists.map(artist => {
-        const track = playerContext.libraryTracks.find(t => t.artist === artist && t.coverURL);
-        const imgUrl = track ? track.coverURL : getFallbackImage(artist);
+    container.innerHTML = recentArtists.map(artist => {
+        const imgUrl = artist.coverURL || getFallbackImage(artist.name);
         return `
-            <div class="artist-circle-card">
+            <div class="artist-circle-card" data-artist="${artist.name}">
                 <div class="artist-img-container">
-                    <img src="${imgUrl}" alt="${artist}" loading="lazy">
+                    <img src="${imgUrl}" alt="${artist.name}" loading="lazy">
                 </div>
-                <span class="artist-name">${truncate(artist, 20)}</span>
+                <span class="artist-name">${truncate(artist.name, 20)}</span>
             </div>
         `;
     }).join('');
+
+    container.querySelectorAll('.artist-circle-card').forEach(card => {
+        card.addEventListener('click', () => {
+            import('./artist-manager.js').then(m => m.openArtistByName(card.dataset.artist));
+        });
+    });
 }
 
 function renderRecentAlbums() {
@@ -308,32 +385,44 @@ function renderRecentAlbums() {
     if (!container) return;
 
     // Get unique albums in reverse order of addition
-    const recent = [...playerContext.libraryTracks].reverse();
-    const albums = [];
+    const recentTracks = [...playerContext.libraryTracks].reverse();
     const seen = new Set();
-    recent.forEach(t => {
-        if (t.album && !seen.has(t.album)) {
-            seen.add(t.album);
-            albums.push(t);
-        }
-    });
+    const recentAlbums = [];
 
-    if (albums.length === 0) {
+    for (const t of recentTracks) {
+        if (t.album) {
+            const albumKey = `${t.album}|${t.artist || 'Unknown Artist'}`;
+            if (!seen.has(albumKey)) {
+                seen.add(albumKey);
+                const albumData = playerContext.cachedAlbums.find(a => a.name === t.album && a.artist === (t.artist || 'Unknown Artist'));
+                if (albumData) recentAlbums.push(albumData);
+                if (recentAlbums.length === 10) break;
+            }
+        }
+    }
+
+    if (recentAlbums.length === 0) {
         container.innerHTML = '<div style="padding:10px; color:var(--text-color);">No recent albums</div>';
         return;
     }
 
-    container.innerHTML = albums.slice(0, 10).map(track => {
+    container.innerHTML = recentAlbums.map(album => {
         return `
-            <div class="album-square-card">
+            <div class="album-square-card" data-album="${album.name}" data-artist="${album.artist}">
                 <div class="album-img-wrapper">
-                    <img src="${track.coverURL || getFallbackImage(track.album)}" alt="${track.album}" loading="lazy">
+                    <img src="${album.coverURL || getFallbackImage(album.name)}" alt="${album.name}" loading="lazy">
                 </div>
-                <span class="card-title-text">${truncate(track.album, 20)}</span>
-                <span class="card-subtitle-text">${truncate(track.artist || 'Unknown', 20)}</span>
+                <span class="card-title-text">${truncate(album.name, 20)}</span>
+                <span class="card-subtitle-text">${truncate(album.artist, 20)}</span>
             </div>
         `;
     }).join('');
+
+    container.querySelectorAll('.album-square-card').forEach(card => {
+        card.addEventListener('click', () => {
+            import('./album-manager.js').then(m => m.openAlbum(card.dataset.album, card.dataset.artist));
+        });
+    });
 }
 
 function renderFavorites() {
@@ -350,7 +439,7 @@ function renderFavorites() {
         const storedPlaylists = JSON.parse(localStorage.getItem('genesis_playlists') || '{}');
         const favoritesPlaylist = Object.values(storedPlaylists).find(p => p.name.toLowerCase() === 'favorites');
         if (favoritesPlaylist && favoritesPlaylist.trackIds.length > 0) {
-            favoriteTracks = favoritesPlaylist.trackIds.map(id => playerContext.libraryTracks.find(t => t.id === id)).filter(Boolean);
+            favoriteTracks = favoritesPlaylist.trackIds.map(id => playerContext.libraryTracksMap.get(id)).filter(Boolean);
         }
     } catch (e) {
         console.error("Error loading favorites for home screen", e);
@@ -390,7 +479,7 @@ export function renderFavoritesGrid() {
         const storedPlaylists = JSON.parse(localStorage.getItem('genesis_playlists') || '{}');
         const favoritesPlaylist = Object.values(storedPlaylists).find(p => p.name.toLowerCase() === 'favorites');
         if (favoritesPlaylist && favoritesPlaylist.trackIds.length > 0) {
-            favoriteTracks = favoritesPlaylist.trackIds.map(id => playerContext.libraryTracks.find(t => t.id === id)).filter(Boolean);
+            favoriteTracks = favoritesPlaylist.trackIds.map(id => playerContext.libraryTracksMap.get(id)).filter(Boolean);
         }
     } catch (e) {
         console.error("Error loading favorites grid", e);
@@ -437,24 +526,30 @@ export function renderLibraryGrid() {
         renderDetailTrackList(sortedTracks.map(t => t.id), rowsContainer);
 
         // Handle select all
-        setTimeout(() => {
-            const selectAll = document.getElementById('select-all-library');
-            if (selectAll) {
-                selectAll.addEventListener('change', (e) => {
-                    const checkboxes = rowsContainer.querySelectorAll('.track-select-checkbox');
-                    checkboxes.forEach(cb => {
-                        if (cb.checked !== e.target.checked) {
-                            cb.checked = e.target.checked;
-                            cb.dispatchEvent(new Event('change'));
-                        }
-                    });
+        const selectAll = document.getElementById('select-all-library');
+        if (selectAll) {
+            selectAll.addEventListener('change', (e) => {
+                const checkboxes = rowsContainer.querySelectorAll('.track-select-checkbox');
+                checkboxes.forEach(cb => {
+                    if (cb.checked !== e.target.checked) {
+                        cb.checked = e.target.checked;
+                        cb.dispatchEvent(new Event('change'));
+                    }
                 });
-            }
-        }, 0);
+            });
+        }
     } else {
         // Render Grid View (Cards)
-        libraryGrid.innerHTML = sortedTracks.map(track => createCardHTML(track)).join('');
-        attachGridListeners(libraryGrid);
+        const fragment = document.createDocumentFragment();
+        sortedTracks.forEach(track => {
+            const card = document.createElement('div');
+            card.innerHTML = createCardHTML(track);
+            const cardElement = card.firstElementChild;
+            attachCardListeners(cardElement, track.id);
+            fragment.appendChild(cardElement);
+        });
+        libraryGrid.innerHTML = '';
+        libraryGrid.appendChild(fragment);
     }
 }
 
@@ -475,33 +570,36 @@ function createCardHTML(track) {
     `;
 }
 
+function attachCardListeners(card, trackId) {
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.track-action-btn') || e.target.closest('.card-footer-play-btn')) return;
+        if (startPlaybackFn) startPlaybackFn([trackId]);
+    });
+    card.querySelector('.card-footer-play-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (startPlaybackFn) startPlaybackFn([trackId]);
+    });
+    card.querySelector('.track-action-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (renderTrackContextMenuFn) renderTrackContextMenuFn(trackId, e.currentTarget, { isFromLibrary: true });
+    });
+}
+
 function attachGridListeners(container) {
     container.querySelectorAll('.recent-media-card').forEach(card => {
-        const trackId = card.dataset.trackId;
-        card.addEventListener('click', (e) => {
-            if (e.target.closest('.track-action-btn') || e.target.closest('.card-footer-play-btn')) return;
-            if (startPlaybackFn) startPlaybackFn([trackId]);
-        });
-        card.querySelector('.card-footer-play-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (startPlaybackFn) startPlaybackFn([trackId]);
-        });
-        card.querySelector('.track-action-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (renderTrackContextMenuFn) renderTrackContextMenuFn(trackId, e.currentTarget, { isFromLibrary: true });
-        });
+        attachCardListeners(card, card.dataset.trackId);
     });
 }
 
 export async function getTrackDetailsFromId(id) {
-    let track = playerContext.libraryTracks.find(t => t.id === id);
+    let track = playerContext.libraryTracksMap.get(id);
     if (track) return track;
     track = await db.tracks.get(id);
     return track || { title: 'Unknown Track', duration: 0 };
 }
 
 export function saveTrackChanges(trackId, updatedMetadata) {
-    const track = playerContext.libraryTracks.find(t => t.id === trackId);
+    const track = playerContext.libraryTracksMap.get(trackId);
     if (!track) return;
     Object.assign(track, updatedMetadata);
     db.tracks.put(track);
@@ -617,7 +715,9 @@ export async function renderDetailTrackList(tracksOrIds, container, options = {}
     }));
 
     container.innerHTML = '';
-    trackRows.filter(Boolean).forEach(row => container.appendChild(row));
+    const fragment = document.createDocumentFragment();
+    trackRows.filter(Boolean).forEach(row => fragment.appendChild(row));
+    container.appendChild(fragment);
     updateSelectionBar();
 }
 
@@ -627,39 +727,27 @@ export function openSectionModal(type) {
     let items = [];
     let renderFn = null;
 
-    const tracks = playerContext.libraryTracks;
-
-    // Helper to filter by 30 days
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const recentTracks = tracks.filter(t => t.dateAdded && t.dateAdded > thirtyDaysAgo);
-
     switch (type) {
         case 'artists':
             title = 'All Artists';
-            items = [...new Set(tracks.map(t => t.artist).filter(Boolean))].sort();
+            items = playerContext.cachedArtists;
             renderFn = (artist) => {
-                const track = tracks.find(t => t.artist === artist && t.coverURL);
-                const imgUrl = track ? track.coverURL : getFallbackImage(artist);
+                const imgUrl = artist.coverURL || getFallbackImage(artist.name);
                 return `
-                    <div class="artist-circle-card" data-artist="${artist}">
+                    <div class="artist-circle-card" data-artist="${artist.name}">
                         <div class="artist-img-container"><img src="${imgUrl}" loading="lazy"></div>
-                        <span class="artist-name">${truncate(artist, 20)}</span>
+                        <span class="artist-name">${truncate(artist.name, 20)}</span>
                     </div>`;
             };
             break;
         case 'albums':
             title = 'All Albums';
-            const albums = [];
-            const seen = new Set();
-            tracks.forEach(t => {
-                if (t.album && !seen.has(t.album)) { seen.add(t.album); albums.push(t); }
-            });
-            items = albums.sort((a, b) => a.album.localeCompare(b.album));
-            renderFn = (track) => `
-                <div class="album-square-card" data-album="${track.album}" data-artist="${track.artist}">
-                    <div class="album-img-wrapper"><img src="${track.coverURL || getFallbackImage(track.album)}" loading="lazy"></div>
-                    <span class="card-title-text">${truncate(track.album, 20)}</span>
-                    <span class="card-subtitle-text">${truncate(track.artist || '', 20)}</span>
+            items = playerContext.cachedAlbums;
+            renderFn = (album) => `
+                <div class="album-square-card" data-album="${album.name}" data-artist="${album.artist}">
+                    <div class="album-img-wrapper"><img src="${album.coverURL || getFallbackImage(album.name)}" loading="lazy"></div>
+                    <span class="card-title-text">${truncate(album.name, 20)}</span>
+                    <span class="card-subtitle-text">${truncate(album.artist, 20)}</span>
                 </div>`;
             break;
     }

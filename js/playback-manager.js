@@ -75,7 +75,7 @@ export async function restorePlaybackState() {
         // Restore Queue
         if (queueIds && queueIds.length > 0) {
             playerContext.trackQueue = queueIds.map(id =>
-                playerContext.libraryTracks.find(t => t.id === id) ||
+                playerContext.libraryTracksMap.get(id) ||
                 playerContext.discoverTracks.find(t => t.id === id)
             ).filter(Boolean);
         }
@@ -92,6 +92,9 @@ export async function restorePlaybackState() {
             const track = playerContext.trackQueue[restoredIndex];
 
             if (audioPlayer && track) {
+                if (!track.objectURL && track.audioBlob) {
+                    track.objectURL = URL.createObjectURL(track.audioBlob);
+                }
                 audioPlayer.src = track.objectURL;
                 audioPlayer.volume = volume !== undefined ? volume : 1;
 
@@ -220,10 +223,26 @@ export function getTimeHandler() {
 
 export function loadTrack(index, autoPlay = true) {
     const audioPlayer = getAudioPlayer();
+
+    // Memory cleanup: Revoke objectURL of current track before switching
+    if (playerContext.currentTrackIndex !== -1) {
+        const currentTrack = playerContext.trackQueue[playerContext.currentTrackIndex];
+        if (currentTrack && currentTrack.objectURL && currentTrack !== playerContext.trackQueue[index]) {
+            URL.revokeObjectURL(currentTrack.objectURL);
+            currentTrack.objectURL = null;
+        }
+    }
+
     playerContext.currentTrackIndex = index;
     const track = playerContext.trackQueue[index];
 
-    if (track) audioPlayer.src = track.objectURL;
+    if (track) {
+        // Lazy load the objectURL if it doesn't exist
+        if (!track.objectURL && track.audioBlob) {
+            track.objectURL = URL.createObjectURL(track.audioBlob);
+        }
+        audioPlayer.src = track.objectURL;
+    }
     updatePlaybackBar(track);
 
     renderQueueTable();
@@ -289,7 +308,7 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
 
     let newQueue = tracksOrIds.map(item => {
         if (typeof item === 'string') {
-            return playerContext.libraryTracks.find(t => t.id === item) || playerContext.discoverTracks.find(t => t.id === item);
+            return playerContext.libraryTracksMap.get(item) || playerContext.discoverTracks.find(t => t.id === item);
         }
         return item;
     }).filter(Boolean);

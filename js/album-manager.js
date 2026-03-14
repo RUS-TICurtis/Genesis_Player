@@ -12,27 +12,7 @@ export function renderAlbumsGrid() {
     const albumsContent = document.querySelector('#albums-section .albums-content');
     if (!albumsContent) return;
 
-    const albums = {};
-
-    playerContext.libraryTracks.forEach(track => {
-        if (track.album) {
-            const albumKey = `${track.album}|${track.artist || 'Unknown Artist'}`;
-            if (!albums[albumKey]) {
-                albums[albumKey] = {
-                    name: track.album,
-                    artist: track.artist || 'Unknown Artist',
-                    coverURL: track.coverURL,
-                    trackIds: []
-                };
-            }
-            albums[albumKey].trackIds.push(track.id);
-            if (track.coverURL && !albums[albumKey].coverURL) {
-                albums[albumKey].coverURL = track.coverURL;
-            }
-        }
-    });
-
-    const albumList = Object.values(albums).sort((a, b) => a.name.localeCompare(b.name));
+    const albumList = playerContext.cachedAlbums;
 
     if (albumList.length === 0) {
         albumsContent.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><p>No albums found in your library.</p></div>`;
@@ -105,14 +85,18 @@ export function openAlbumView(album) {
 
 export function openAlbumByName(albumName) {
     if (!albumName) return;
-    const tracks = playerContext.libraryTracks.filter(t => t.album === albumName);
-    if (tracks.length === 0) return;
+    // Note: Multiple artists might have albums with same name,
+    // but without more info we take the first match or update this to accept artist too.
+    const album = playerContext.cachedAlbums.find(a => a.name === albumName);
+    if (!album) return;
 
-    const album = {
-        name: albumName,
-        artist: tracks[0].artist || 'Unknown Artist',
-        coverURL: tracks[0].coverURL,
-        trackIds: tracks.map(t => t.id)
-    };
+    openAlbumView(album);
+}
+
+export function openAlbum(albumName, artistName) {
+    if (!albumName) return;
+    const album = playerContext.cachedAlbums.find(a => a.name === albumName && a.artist === (artistName || 'Unknown Artist'));
+    if (!album) return;
+
     openAlbumView(album);
 }

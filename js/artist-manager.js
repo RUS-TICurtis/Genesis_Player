@@ -13,24 +13,7 @@ export function renderArtistsGrid() {
     const artistsContent = document.querySelector('#artists-section .artists-content');
     if (!artistsContent) return;
 
-    const artists = {};
-
-    playerContext.libraryTracks.forEach(track => {
-        const artistName = track.artist || 'Unknown Artist';
-        if (!artists[artistName]) {
-            artists[artistName] = {
-                name: artistName,
-                trackIds: [],
-                coverURL: null
-            };
-        }
-        artists[artistName].trackIds.push(track.id);
-        if (track.coverURL && !artists[artistName].coverURL) {
-            artists[artistName].coverURL = track.coverURL;
-        }
-    });
-
-    const artistList = Object.values(artists).sort((a, b) => a.name.localeCompare(b.name));
+    const artistList = playerContext.cachedArtists;
 
     if (artistList.length === 0) {
         artistsContent.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><p>No artists found in your library.</p></div>`;
@@ -108,13 +91,8 @@ export function openArtistView(artist) {
 
 export function openArtistByName(artistName) {
     if (!artistName) return;
-    const tracks = playerContext.libraryTracks.filter(t => (t.artist || 'Unknown Artist') === artistName);
-    if (tracks.length === 0) return;
+    const artist = playerContext.cachedArtists.find(a => a.name === artistName);
+    if (!artist) return;
 
-    const artist = {
-        name: artistName,
-        coverURL: tracks.find(t => t.coverURL)?.coverURL || null,
-        trackIds: tracks.map(t => t.id)
-    };
     openArtistView(artist);
 }
