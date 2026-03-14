@@ -19,8 +19,32 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 1552;
 
+// Simple In-Memory Cache
+const apiCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+const cacheMiddleware = (req, res, next) => {
+  const key = req.originalUrl || req.url;
+  const cached = apiCache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    return res.json(cached.data);
+  }
+
+  const originalJson = res.json;
+  res.json = function(data) {
+    if (res.statusCode === 200) {
+      apiCache.set(key, { data, timestamp: Date.now() });
+    }
+    return originalJson.call(this, data);
+  };
+  next();
+};
+
 // Use CORS middleware to allow requests from your front-end
 app.use(cors());
+
+// Apply cache middleware to all API endpoints
+app.use('/api', cacheMiddleware);
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, '../public')));

@@ -200,10 +200,16 @@ export async function handleRemoveTrack(trackId) {
 
 export function updateLibraryCaches() {
     const tracks = playerContext.libraryTracks;
-
-    // Update cached artists
     const artistsMap = new Map();
+    const albumsMap = new Map();
+
     tracks.forEach(t => {
+        // Pre-compute search string
+        if (!t.searchStr) {
+            t.searchStr = `${t.title || ''} ${t.artist || ''} ${t.album || ''}`.toLowerCase();
+        }
+
+        // Artist Cache
         const artistName = t.artist || 'Unknown Artist';
         if (!artistsMap.has(artistName)) {
             artistsMap.set(artistName, {
@@ -217,28 +223,27 @@ export function updateLibraryCaches() {
         if (t.coverURL && !artistData.coverURL) {
             artistData.coverURL = t.coverURL;
         }
-    });
-    playerContext.cachedArtists = [...artistsMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
-    // Update cached albums
-    const albumsMap = new Map();
-    tracks.forEach(t => {
+        // Album Cache
         if (t.album) {
-            const albumKey = `${t.album}|${t.artist || 'Unknown Artist'}`;
+            const albumKey = `${t.album}|${artistName}`;
             if (!albumsMap.has(albumKey)) {
                 albumsMap.set(albumKey, {
                     name: t.album,
-                    artist: t.artist || 'Unknown Artist',
+                    artist: artistName,
                     coverURL: t.coverURL,
                     trackIds: []
                 });
             }
-            albumsMap.get(albumKey).trackIds.push(t.id);
-            if (t.coverURL && !albumsMap.get(albumKey).coverURL) {
-                albumsMap.get(albumKey).coverURL = t.coverURL;
+            const albumData = albumsMap.get(albumKey);
+            albumData.trackIds.push(t.id);
+            if (t.coverURL && !albumData.coverURL) {
+                albumData.coverURL = t.coverURL;
             }
         }
     });
+
+    playerContext.cachedArtists = [...artistsMap.values()].sort((a, b) => a.name.localeCompare(b.name));
     playerContext.cachedAlbums = [...albumsMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -602,7 +607,12 @@ export function saveTrackChanges(trackId, updatedMetadata) {
     const track = playerContext.libraryTracksMap.get(trackId);
     if (!track) return;
     Object.assign(track, updatedMetadata);
+
+    // Ensure search string is updated if title/artist/album changed
+    track.searchStr = `${track.title || ''} ${track.artist || ''} ${track.album || ''}`.toLowerCase();
+
     db.tracks.put(track);
+    updateLibraryCaches();
 }
 
 export function toggleTrackSelection(trackId) {

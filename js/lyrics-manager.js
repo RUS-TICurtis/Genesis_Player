@@ -82,10 +82,20 @@ export function renderLyrics(track) {
     const lyricsContainer = document.getElementById('lyrics-container');
     if (!lyricsContainer) return;
 
+    // Reset cache when rendering new lyrics
+    cachedLyricLines = null;
+
     if (track.syncedLyrics && track.syncedLyrics.length > 0) {
-        lyricsContainer.innerHTML = track.syncedLyrics.map((line, index) =>
-            `<p class="lyric-line" data-index="${index}">${line.text || '&nbsp;'}</p>`
-        ).join('');
+        const fragment = document.createDocumentFragment();
+        track.syncedLyrics.forEach((line, index) => {
+            const p = document.createElement('p');
+            p.className = 'lyric-line';
+            p.dataset.index = index;
+            p.innerHTML = line.text || '&nbsp;';
+            fragment.appendChild(p);
+        });
+        lyricsContainer.innerHTML = '';
+        lyricsContainer.appendChild(fragment);
     } else if (track.lyrics) {
         lyricsContainer.innerHTML = track.lyrics.replace(/\n/g, '<br>');
         // Robust scroll reset
@@ -100,15 +110,11 @@ export function renderLyrics(track) {
 }
 
 let currentLyricIndex = -1;
+let cachedLyricLines = null;
 
 export function syncLyrics(currentTime) {
     if (!playerContext.trackQueue || playerContext.currentTrackIndex < 0) return;
     const track = playerContext.trackQueue[playerContext.currentTrackIndex];
-
-    // Reset index if track changed (simple check: if currentTime is very start, or track ID mismatch - though logic here is usually called per tick)
-    // Actually, `currentLyricIndex` state needs to be managed carefully. 
-    // Ideally we reset it when track changes. But here we can just compute it fresh or keep it module-scoped.
-    // If we want to be safe, we can check if currentTime < previousTime (seek/restart) to reset, but simpler is just to re-calc.
 
     if (!track || !track.syncedLyrics || track.syncedLyrics.length === 0) return;
 
@@ -121,19 +127,37 @@ export function syncLyrics(currentTime) {
     }
 
     if (newLyricIndex !== currentLyricIndex) {
-        currentLyricIndex = newLyricIndex;
-        const lyricLines = document.querySelectorAll('#lyrics-container .lyric-line');
-        lyricLines.forEach((line, index) => {
-            line.classList.remove('active', 'past', 'upcoming');
-            if (index === currentLyricIndex) {
-                line.classList.add('active');
-                line.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else if (index < currentLyricIndex) {
-                line.classList.add('past');
-            } else {
-                line.classList.add('upcoming');
+        if (!cachedLyricLines) {
+            cachedLyricLines = document.querySelectorAll('#lyrics-container .lyric-line');
+        }
+
+        if (cachedLyricLines.length === 0) return;
+
+        // If it's a sequential move, we can optimize by only updating two lines
+        if (newLyricIndex === currentLyricIndex + 1 && currentLyricIndex >= -1) {
+            if (currentLyricIndex >= 0 && cachedLyricLines[currentLyricIndex]) {
+                cachedLyricLines[currentLyricIndex].classList.replace('active', 'past');
             }
-        });
+            if (cachedLyricLines[newLyricIndex]) {
+                cachedLyricLines[newLyricIndex].classList.remove('upcoming');
+                cachedLyricLines[newLyricIndex].classList.add('active');
+                cachedLyricLines[newLyricIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        } else {
+            // Full sync for seeks or jumps
+            cachedLyricLines.forEach((line, index) => {
+                line.classList.remove('active', 'past', 'upcoming');
+                if (index === newLyricIndex) {
+                    line.classList.add('active');
+                    line.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else if (index < newLyricIndex) {
+                    line.classList.add('past');
+                } else {
+                    line.classList.add('upcoming');
+                }
+            });
+        }
+        currentLyricIndex = newLyricIndex;
     }
 }
 

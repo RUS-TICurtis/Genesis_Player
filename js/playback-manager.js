@@ -37,24 +37,31 @@ function addToHistory(track) {
     }
 }
 
-// Helpers to access DOM elements dynamically or cached
-function getAudioPlayer() { return document.getElementById('audio-player'); }
-function getProgressFill() { return document.getElementById('progress-fill'); }
-function getProgressHead() { return document.getElementById('progress-head'); }
-function getCurrentTimeEl() { return document.getElementById('current-time'); }
-function getDurationEl() { return document.getElementById('duration'); }
-function getVolumeSlider() { return document.getElementById('volume-slider'); }
-// ... (keep getters)
-function getVolumePercentage() { return document.getElementById('volume-percentage'); }
-function getVolumeIcon() { return document.getElementById('volume-icon'); }
-function getMuteBtn() { return document.getElementById('mute-btn'); }
-function getPlayIcon() { return document.getElementById('play-icon'); }
-function getShuffleBtn() { return document.getElementById('shuffle-btn'); }
-function getRepeatBtn() { return document.getElementById('repeat-btn'); }
-function getSongTitle() { return document.getElementById('song-title'); }
-function getArtistName() { return document.getElementById('artist-name'); }
-function getAlbumArtImg() { return document.getElementById('album-art-img'); }
-function getAlbumArtPlaceholder() { return document.getElementById('album-art-placeholder'); }
+// DOM element caching
+const cachedElements = {};
+function getEl(id) {
+    if (!cachedElements[id]) {
+        cachedElements[id] = document.getElementById(id);
+    }
+    return cachedElements[id];
+}
+
+function getAudioPlayer() { return getEl('audio-player'); }
+function getProgressFill() { return getEl('progress-fill'); }
+function getProgressHead() { return getEl('progress-head'); }
+function getCurrentTimeEl() { return getEl('current-time'); }
+function getDurationEl() { return getEl('duration'); }
+function getVolumeSlider() { return getEl('volume-slider'); }
+function getVolumePercentage() { return getEl('volume-percentage'); }
+function getVolumeIcon() { return getEl('volume-icon'); }
+function getMuteBtn() { return getEl('mute-btn'); }
+function getPlayIcon() { return getEl('play-icon'); }
+function getShuffleBtn() { return getEl('shuffle-btn'); }
+function getRepeatBtn() { return getEl('repeat-btn'); }
+function getSongTitle() { return getEl('song-title'); }
+function getArtistName() { return getEl('artist-name'); }
+function getAlbumArtImg() { return getEl('album-art-img'); }
+function getAlbumArtPlaceholder() { return getEl('album-art-placeholder'); }
 
 export async function restorePlaybackState() {
     const savedState = localStorage.getItem(PLAYBACK_STATE_KEY);
@@ -132,9 +139,13 @@ export async function restorePlaybackState() {
     }
 }
 
-export function savePlaybackState() {
+let lastSaveTime = 0;
+export function savePlaybackState(force = false) {
+    const now = Date.now();
+    if (!force && now - lastSaveTime < 2000) return; // Throttle to 2 seconds
+
     const audioPlayer = getAudioPlayer();
-    if (playerContext.currentTrackIndex < 0 || !playerContext.trackQueue[playerContext.currentTrackIndex]) {
+    if (!audioPlayer || playerContext.currentTrackIndex < 0 || !playerContext.trackQueue[playerContext.currentTrackIndex]) {
         localStorage.removeItem(PLAYBACK_STATE_KEY);
         return;
     }
@@ -147,6 +158,7 @@ export function savePlaybackState() {
         repeatState: playerContext.repeatState,
     };
     localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(state));
+    lastSaveTime = now;
 }
 
 export function updatePlaybackBar(track) {
