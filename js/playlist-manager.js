@@ -195,6 +195,15 @@ export function openPlaylistView(idOrObj) {
         playlist = playlists[idOrObj];
     }
 
+    if (!playlist) {
+        console.error('Playlist not found:', idOrObj);
+        // Hide the detail view and show playlists list
+        playlistDetailView.classList.add('hidden');
+        document.getElementById('playlists-section').classList.remove('hidden');
+        playlistsList.classList.remove('hidden');
+        return;
+    }
+
     // Hide Playlists Section (parent)
     document.getElementById('playlists-section').classList.add('hidden');
 

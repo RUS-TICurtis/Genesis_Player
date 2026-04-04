@@ -15,7 +15,8 @@ import { fetchHearThisTracks, searchHearThis } from './hearthis.js';
 import { fetchTrending as fetchAudioDBTrending } from './theaudiodb.js';
 import { fetchMusicBrainzTrending } from './musicbrainz.js';
 import { fetchGeniusLyrics } from './genius.js';
-import { fetchSpotifyTrending, searchSpotify, fetchSpotifyGenre } from './spotify.js';
+import { fetchSpotifyTrending, searchSpotify, fetchSpotifyGenre, checkSpotifyIntegration } from './spotify.js';
+import { fetchDeezerTrending, searchDeezer, fetchDeezerGenre, checkDeezerIntegration } from './deezer.js';
 import { fetchJamendoTracks as searchJamendoForResolve } from './jamendo.js';
 
 
@@ -131,6 +132,66 @@ app.get('/api/lyrics', async (req, res) => {
 });
 
 // Spotify Endpoints
+app.get('/api/spotify/status', async (req, res) => {
+  try {
+    const status = await checkSpotifyIntegration();
+    res.json(status);
+  } catch (error) {
+    res.json({ ok: false });
+  }
+});
+
+// Deezer Endpoints
+app.get('/api/deezer/status', async (req, res) => {
+  try {
+    const status = await checkDeezerIntegration();
+    res.json(status);
+  } catch (error) {
+    res.json({ ok: false });
+  }
+});
+
+app.get('/api/deezer/trending', async (req, res) => {
+  try {
+    const limit = Number.parseInt(req.query.limit, 10) || 25;
+    const tracks = await fetchDeezerTrending(limit);
+    res.json(tracks);
+  } catch (error) {
+    console.error('Deezer trending route error:', error.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/deezer/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: 'Query is required' });
+
+    const limit = Number.parseInt(req.query.limit, 10) || 20;
+    const index = Number.parseInt(req.query.index, 10) || 0;
+    const tracks = await searchDeezer(q, limit, index);
+    res.json(tracks);
+  } catch (error) {
+    console.error('Deezer search route error:', error.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/deezer/genre', async (req, res) => {
+  try {
+    const { genre } = req.query;
+    if (!genre) return res.status(400).json({ error: 'Genre is required' });
+
+    const limit = Number.parseInt(req.query.limit, 10) || 10;
+    const index = Number.parseInt(req.query.index, 10) || 0;
+    const tracks = await fetchDeezerGenre(genre, limit, index);
+    res.json(tracks);
+  } catch (error) {
+    console.error('Deezer genre route error:', error.message);
+    res.json([]);
+  }
+});
+
 app.get('/api/spotify/trending', async (req, res) => {
   try {
     const tracks = await fetchSpotifyTrending();

@@ -24,6 +24,121 @@ document.addEventListener('DOMContentLoaded', async function () {
     };
     const deferUserTask = (fn) => setTimeout(fn, 0);
 
+    const getCurrentTrack = () => playerContext.trackQueue[playerContext.currentTrackIndex] || null;
+
+    const syncNativePlaybackControls = () => {
+        const audio = document.getElementById('audio-player');
+        const track = getCurrentTrack();
+        const hasTrack = Boolean(track);
+
+        if (window.electronAPI?.updateTaskbarPlayback) {
+            window.electronAPI.updateTaskbarPlayback({
+                hasTrack,
+                isPlaying: Boolean(playerContext.isPlaying),
+                title: track?.title || '',
+                artist: track?.artist || '',
+                isShuffled: Boolean(playerContext.isShuffled),
+                repeatState: Number(playerContext.repeatState || 0)
+            });
+        }
+
+        if (!('mediaSession' in navigator)) return;
+
+        try {
+            navigator.mediaSession.playbackState = playerContext.isPlaying ? 'playing' : 'paused';
+
+            if (hasTrack) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title || 'Unknown Title',
+                    artist: track.artist || 'Unknown Artist',
+                    album: track.album || 'Genesis Player',
+                    artwork: track.coverURL ? [
+                        { src: track.coverURL, sizes: '96x96', type: 'image/png' },
+                        { src: track.coverURL, sizes: '128x128', type: 'image/png' },
+                        { src: track.coverURL, sizes: '192x192', type: 'image/png' },
+                        { src: track.coverURL, sizes: '256x256', type: 'image/png' },
+                        { src: track.coverURL, sizes: '384x384', type: 'image/png' },
+                        { src: track.coverURL, sizes: '512x512', type: 'image/png' }
+                    ] : []
+                });
+            } else {
+                navigator.mediaSession.metadata = null;
+            }
+
+            if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+                navigator.mediaSession.setPositionState({
+                    duration: audio.duration,
+                    playbackRate: audio.playbackRate || 1,
+                    position: audio.currentTime || 0
+                });
+            }
+        } catch (e) {
+            // Some browsers/platforms partially support Media Session APIs.
+        }
+    };
+
+    const initNativePlaybackControlHandlers = () => {
+        if (window.electronAPI?.onTaskbarControl) {
+            const unsub = window.electronAPI.onTaskbarControl((action) => {
+                switch (action) {
+                    case 'previous':
+                        PlaybackManager.prevTrack();
+                        break;
+                    case 'toggle-play':
+                        playerContext.isPlaying ? PlaybackManager.pauseTrack() : PlaybackManager.playTrack();
+                        break;
+                    case 'next':
+                        PlaybackManager.nextTrack();
+                        break;
+                    case 'toggle-repeat':
+                        PlaybackManager.toggleRepeat();
+                        break;
+                    case 'toggle-shuffle':
+                        PlaybackManager.toggleShuffle();
+                        break;
+                }
+            });
+
+            window.addEventListener('beforeunload', () => {
+                if (typeof unsub === 'function') unsub();
+            });
+        }
+
+        if ('mediaSession' in navigator) {
+            const safeSetAction = (action, handler) => {
+                try {
+                    navigator.mediaSession.setActionHandler(action, handler);
+                } catch (e) {
+                    // Action not supported by this browser/platform.
+                }
+            };
+
+            safeSetAction('play', () => PlaybackManager.playTrack());
+            safeSetAction('pause', () => PlaybackManager.pauseTrack());
+            safeSetAction('previoustrack', () => PlaybackManager.prevTrack());
+            safeSetAction('nexttrack', () => PlaybackManager.nextTrack());
+            safeSetAction('seekbackward', (details) => {
+                const audio = document.getElementById('audio-player');
+                if (!audio) return;
+                const offset = details?.seekOffset || 10;
+                audio.currentTime = Math.max((audio.currentTime || 0) - offset, 0);
+            });
+            safeSetAction('seekforward', (details) => {
+                const audio = document.getElementById('audio-player');
+                if (!audio) return;
+                const offset = details?.seekOffset || 10;
+                const duration = Number.isFinite(audio.duration) ? audio.duration : Infinity;
+                audio.currentTime = Math.min((audio.currentTime || 0) + offset, duration);
+            });
+            safeSetAction('stop', () => {
+                const audio = document.getElementById('audio-player');
+                if (!audio) return;
+                PlaybackManager.pauseTrack();
+                audio.currentTime = 0;
+            });
+        }
+    };
+
     // --- 1. Dependency Injection / Wiring ---
 
     // Library needs Playback (for card clicks) and ContextMenu
@@ -177,7 +292,16 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (audioPlayer) {
         audioPlayer.addEventListener('timeupdate', PlaybackManager.getTimeHandler());
         audioPlayer.addEventListener('ended', PlaybackManager.nextTrack);
+        audioPlayer.addEventListener('play', syncNativePlaybackControls);
+        audioPlayer.addEventListener('pause', syncNativePlaybackControls);
+        audioPlayer.addEventListener('loadedmetadata', syncNativePlaybackControls);
+        audioPlayer.addEventListener('timeupdate', syncNativePlaybackControls);
+        audioPlayer.addEventListener('ended', syncNativePlaybackControls);
     }
+
+    initNativePlaybackControlHandlers();
+    document.addEventListener('genesis-playback-state-changed', syncNativePlaybackControls);
+    syncNativePlaybackControls();
 
     // Playback Controls
     const togglePlay = () => (playerContext.isPlaying ? PlaybackManager.pauseTrack() : PlaybackManager.playTrack());

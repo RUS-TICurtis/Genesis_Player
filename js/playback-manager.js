@@ -8,6 +8,10 @@ const PLAYBACK_STATE_KEY = 'genesis_playback_state';
 const HISTORY_KEY = 'genesis_play_history';
 let isDragging = false;
 
+function notifyPlaybackStateChanged() {
+    document.dispatchEvent(new CustomEvent('genesis-playback-state-changed'));
+}
+
 function addToHistory(track) {
     if (!track) return;
     try {
@@ -171,6 +175,8 @@ export function updatePlaybackBar(track) {
     if (extendedInfoPanel && extendedInfoPanel.classList.contains('active')) {
         updateExtendedInfoPanel(track);
     }
+
+    notifyPlaybackStateChanged();
 }
 
 function updateExtendedInfoPanel(track) {
@@ -235,7 +241,7 @@ export async function loadTrack(index, autoPlay = true) {
 
     if (track) {
         // If it's a Spotify track or has no objectURL but is from a web source
-        if (!track.objectURL && (track.source === 'spotify' || track.source === 'lastfm' || track.source === 'audiodb' || track.source === 'musicbrainz')) {
+        if (!track.objectURL && (track.source === 'spotify' || track.source === 'deezer' || track.source === 'lastfm' || track.source === 'audiodb' || track.source === 'musicbrainz')) {
             try {
                 showMessage(`Resolving stream for "${track.title}"...`);
                 const resolveRes = await fetch(`/api/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
@@ -296,6 +302,7 @@ export function playTrack() {
         document.querySelector('.playback-bar')?.classList.add('playing');
         document.body.classList.add('is-playing');
         updateGlobalPlayingState(playerContext.trackQueue[playerContext.currentTrackIndex]?.id);
+        notifyPlaybackStateChanged();
     }).catch(e => {
         console.error("Playback failed:", e);
         pauseTrack();
@@ -313,6 +320,7 @@ export function pauseTrack() {
     document.querySelector('.playback-bar')?.classList.remove('playing');
     document.body.classList.remove('is-playing');
     updateGlobalPlayingState(playerContext.trackQueue[playerContext.currentTrackIndex]?.id);
+    notifyPlaybackStateChanged();
 }
 
 export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
@@ -320,7 +328,26 @@ export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
 
     let newQueue = tracksOrIds.map(item => {
         if (typeof item === 'string') {
-            return playerContext.libraryTracks.find(t => t.id === item) || playerContext.discoverTracks.find(t => t.id === item);
+            const itemId = String(item);
+            const matchedTrack = playerContext.libraryTracks.find(t => String(t.id) === itemId)
+                || playerContext.discoverTracks.find(t => String(t.id) === itemId);
+            if (matchedTrack) return matchedTrack;
+
+            // Allow direct URL playback from open-url actions.
+            if (/^https?:\/\//i.test(itemId)) {
+                return {
+                    id: `url-${Date.now()}`,
+                    title: 'Web Stream',
+                    artist: 'External Source',
+                    album: 'URL Playback',
+                    duration: 0,
+                    coverURL: getFallbackImage(itemId, 'Web Stream'),
+                    objectURL: itemId,
+                    isURL: true,
+                    source: 'url'
+                };
+            }
+            return null;
         }
         return item;
     }).filter(Boolean);
@@ -405,6 +432,7 @@ export function setShuffleState(shuffle) {
         shuffleBtn.style.color = playerContext.isShuffled ? 'var(--primary-color)' : 'var(--text-color)';
         shuffleBtn.title = playerContext.isShuffled ? "Shuffle On" : "Shuffle Off";
     }
+    notifyPlaybackStateChanged();
 }
 
 export function toggleRepeat() {
@@ -434,6 +462,7 @@ export function updateRepeatButtonUI() {
         title = "Repeat One";
     }
     repeatBtn.title = title;
+    notifyPlaybackStateChanged();
 }
 
 export function removeFromQueue(index) {

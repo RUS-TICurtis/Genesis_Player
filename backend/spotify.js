@@ -18,6 +18,7 @@ async function getAccessToken() {
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
     try {
         const response = await axios.post('https://accounts.spotify.com/api/token', 'grant_type=client_credentials', {
+            proxy: false,
             headers: {
                 'Authorization': `Basic ${auth}`,
                 'Content-Type': 'application/x-www-form-urlencoded'
@@ -33,6 +34,22 @@ async function getAccessToken() {
     }
 }
 
+export async function checkSpotifyIntegration() {
+    try {
+        const token = await getAccessToken();
+        const probeRes = await axios.get('https://api.spotify.com/v1/search?q=global&type=track&limit=1', {
+            proxy: false,
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const ok = Array.isArray(probeRes.data?.tracks?.items);
+        return { ok };
+    } catch (error) {
+        console.error('Spotify integration check failed:', error.response?.status, error.response?.data || error.message);
+        return { ok: false };
+    }
+}
+
 export async function fetchSpotifyTrending() {
     try {
         const token = await getAccessToken();
@@ -41,6 +58,7 @@ export async function fetchSpotifyTrending() {
         const searchUrl = 'https://api.spotify.com/v1/search?q=Global%20Top%2050&type=playlist&limit=1';
         console.log(`Searching for trending playlists at: ${searchUrl}`);
         const searchRes = await axios.get(searchUrl, {
+            proxy: false,
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -48,6 +66,7 @@ export async function fetchSpotifyTrending() {
         if (!playlist) {
             console.warn('No trending playlist found, falling back to track search.');
             const fallbackRes = await axios.get('https://api.spotify.com/v1/search?q=year:2024-2025&type=track&limit=25', {
+                proxy: false,
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             return (fallbackRes.data.tracks?.items || []).map(track => mapSpotifyTrack(track)).filter(t => t !== null);
@@ -56,6 +75,7 @@ export async function fetchSpotifyTrending() {
         const playlistTracksUrl = `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=25`;
         console.log(`Fetching tracks from playlist: ${playlist.name} (${playlist.id})`);
         const tracksResponse = await axios.get(playlistTracksUrl, {
+            proxy: false,
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -87,6 +107,7 @@ export async function searchSpotify(query) {
     try {
         const token = await getAccessToken();
         const response = await axios.get(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=20`, {
+            proxy: false,
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -101,6 +122,7 @@ export async function fetchSpotifyGenre(genre, limit = 5) {
     try {
         const token = await getAccessToken();
         const response = await axios.get(`https://api.spotify.com/v1/search?q=genre:${encodeURIComponent(genre)}&type=track&limit=${limit}`, {
+            proxy: false,
             headers: { 'Authorization': `Bearer ${token}` }
         });
 

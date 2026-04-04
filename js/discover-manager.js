@@ -40,6 +40,66 @@ async function fetchSpotifyGenre(genre, limit = 5) {
     }
 }
 
+async function checkSpotifyStatus() {
+    try {
+        const response = await fetch('/api/spotify/status');
+        if (!response.ok) throw new Error('Spotify status API request failed');
+        const data = await response.json();
+        return data?.ok === true;
+    } catch (e) {
+        console.error('Spotify status check error:', e);
+        return false;
+    }
+}
+
+async function fetchDeezerTrending(limit = 20) {
+    try {
+        const response = await fetch(`/api/deezer/trending?limit=${limit}`);
+        if (!response.ok) throw new Error('Deezer trending API request failed');
+        const data = await response.json();
+        return data;
+    } catch (e) {
+        console.error('Deezer trending fetch error:', e);
+        return [];
+    }
+}
+
+async function fetchDeezerGenre(genre, limit = 6) {
+    try {
+        const response = await fetch(`/api/deezer/genre?genre=${encodeURIComponent(genre)}&limit=${limit}`);
+        if (!response.ok) throw new Error('Deezer genre API request failed');
+        const data = await response.json();
+        return data;
+    } catch (e) {
+        console.error(`Deezer genre fetch error (${genre}):`, e);
+        return [];
+    }
+}
+
+async function searchDeezer(query, limit = 20) {
+    try {
+        const response = await fetch(`/api/deezer/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+        if (!response.ok) throw new Error('Deezer search API request failed');
+        const data = await response.json();
+        return data;
+    } catch (e) {
+        console.error('Deezer search error:', e);
+        return [];
+    }
+}
+
+async function checkDeezerStatus() {
+    try {
+        const response = await fetch('/api/deezer/status');
+        if (!response.ok) throw new Error('Deezer status API request failed');
+        const data = await response.json();
+        return data?.ok === true;
+    } catch (e) {
+        console.error('Deezer status check error:', e);
+        return false;
+    }
+}
+
 async function fetchLastFMTracks() {
     try {
         const response = await fetch('/api/discover/lastfm');
@@ -109,7 +169,37 @@ async function searchSpotify(query) {
 // Sort orders for Jamendo to provide variety
 const JAMENDO_ORDERS = ['popularity_week', 'popularity_month', 'buzzrate', 'downloads_week', 'downloads_month', 'releasedate'];
 
-export async function fetchJamendoTracks(query = '') {
+function hashString(value = '') {
+    let hash = 0;
+    const str = String(value);
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+function sanitizeDiscoverTracks(tracks) {
+    return (tracks || []).map((track, idx) => {
+        if (!track || !track.title) return null;
+
+        const source = track.source || 'discover';
+        const rawId = track.id ? String(track.id) : '';
+        const id = rawId && rawId !== 'undefined' && rawId !== 'null'
+            ? rawId
+            : `${source}-${hashString(`${track.title}|${track.artist || ''}|${track.album || ''}|${idx}`)}`;
+
+        return {
+            ...track,
+            id,
+            source,
+            coverURL: track.coverURL || getFallbackImage(id, track.title),
+            isFromDiscover: true
+        };
+    }).filter(Boolean);
+}
+
+export async function fetchJamendoTracks(query = '', shouldPersist = true, showErrorUI = true) {
     // Call our own server's proxy endpoint
     // Add randomness for "Refresh" by picking a random sort order
     const order = JAMENDO_ORDERS[Math.floor(Math.random() * JAMENDO_ORDERS.length)];
@@ -124,7 +214,7 @@ export async function fetchJamendoTracks(query = '') {
         const data = await response.json();
 
         // Map Jamendo track data to our application's track format and store it
-        const tracks = data.results.map(track => ({
+        const tracks = sanitizeDiscoverTracks((data.results || []).map(track => ({
             id: `jamendo-${track.id}`, // Unique ID for discover tracks
             title: track.name,
             artist: track.artist_name,
@@ -135,27 +225,31 @@ export async function fetchJamendoTracks(query = '') {
             isURL: true,
             isFromDiscover: true, // Custom flag
             source: 'jamendo'
-        }));
+        })));
 
-        playerContext.discoverTracks = tracks;
-        saveDiscoverTracks(tracks);
+        if (shouldPersist) {
+            playerContext.discoverTracks = tracks;
+            saveDiscoverTracks(tracks);
+        }
         return tracks;
     } catch (error) {
         console.error("Error fetching from discover endpoint:", error);
-        if (discoverGrid) discoverGrid.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">Could not load tracks from Jamendo. Please check your connection or API key.</div>`;
+        if (showErrorUI && discoverGrid) {
+            discoverGrid.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">Could not load tracks from Jamendo. Please check your connection or API key.</div>`;
+        }
         return [];
     }
 }
 
 function saveDiscoverTracks(tracks) {
-    localStorage.setItem(DISCOVER_STORAGE_KEY, JSON.stringify(tracks));
+    localStorage.setItem(DISCOVER_STORAGE_KEY, JSON.stringify(sanitizeDiscoverTracks(tracks)));
 }
 
 export function loadDiscoverFromStorage() {
     const stored = localStorage.getItem(DISCOVER_STORAGE_KEY);
     if (stored) {
         try {
-            playerContext.discoverTracks = JSON.parse(stored);
+            playerContext.discoverTracks = sanitizeDiscoverTracks(JSON.parse(stored));
             return true;
         } catch (e) {
             console.error("Error loading discover tracks from storage", e);
@@ -168,18 +262,20 @@ export function renderDiscoverCards(tracks) {
     const discoverGrid = document.getElementById('discover-grid');
     if (!discoverGrid) return;
 
-    if (tracks.length === 0) {
+    const safeTracks = sanitizeDiscoverTracks(tracks);
+
+    if (safeTracks.length === 0) {
         discoverGrid.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">No tracks found.</div>`;
         return;
     }
 
-    discoverGrid.innerHTML = tracks.map(track => {
+    discoverGrid.innerHTML = safeTracks.map(track => {
         const isCurrentlyPlaying = playerContext.currentTrack?.id === track.id;
         const playingClass = isCurrentlyPlaying ? 'currently-playing' : '';
         return `
             <div class="recent-media-card ${playingClass}" data-track-id="${track.id}" tabindex="0">
                 <div class="album-art">
-                    <img src="${track.coverURL}" alt="${track.title}" loading="lazy">
+                    <img src="${track.coverURL || getFallbackImage(track.id, track.title)}" alt="${track.title}" loading="lazy">
                     ${track.objectURL ? '' : '<div class="source-badge" style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.7);color:white;padding:2px 5px;font-size:10px;">MetaData Only</div>'}
                 </div>
                 <div class="card-footer">
@@ -190,12 +286,24 @@ export function renderDiscoverCards(tracks) {
         `;
     }).join('');
 
+    discoverGrid.querySelectorAll('.album-art img').forEach((img) => {
+        img.addEventListener('error', () => {
+            if (img.dataset.fallbackApplied === '1') return;
+            img.dataset.fallbackApplied = '1';
+            const card = img.closest('.recent-media-card');
+            img.src = getFallbackImage(card?.dataset.trackId || img.alt, img.alt);
+        });
+    });
+
+    const discoverMap = new Map(safeTracks.map(t => [String(t.id), t]));
+
     // Play button logic
     discoverGrid.querySelectorAll('.card-footer-play-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent card click
-            const trackId = e.currentTarget.closest('.recent-media-card').dataset.trackId;
-            if (startPlaybackFn) startPlaybackFn([trackId]);
+            const trackId = String(e.currentTarget.closest('.recent-media-card').dataset.trackId || '');
+            const selectedTrack = discoverMap.get(trackId);
+            if (startPlaybackFn) startPlaybackFn([selectedTrack || trackId]);
         });
     });
 
@@ -241,12 +349,13 @@ async function fetchMusicBrainzTracks() {
         const data = await response.json();
 
         return data.map(t => ({
-            id: `mb-${t.id}`,
+            id: t.id ? `mb-${t.id}` : null,
             title: t.title,
             artist: t.artist,
             album: t.album, // Release title
             duration: 0, // MusicBrainz doesn't provide duration easily in this view
-            coverURL: t.coverURL || getFallbackImage(t.title, t.title),
+            // Use local fallback art to avoid noisy CAA 404/500 errors in the browser console.
+            coverURL: getFallbackImage(t.id || t.title, t.title),
             objectURL: null, // Not playable
             isURL: false,
             isFromDiscover: true,
@@ -268,6 +377,57 @@ function shuffleArray(array) {
     return array;
 }
 
+function dedupeTracks(tracks) {
+    const seen = new Set();
+    const unique = [];
+
+    for (const track of sanitizeDiscoverTracks(tracks)) {
+        if (!track || !track.title) continue;
+
+        const key = `${track.title.toLowerCase().trim()}::${(track.artist || '').toLowerCase().trim()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(track);
+    }
+
+    return unique;
+}
+
+function normalizeText(value = '') {
+    return String(value).toLowerCase().trim();
+}
+
+function scoreTrackForQuery(track, normalizedQuery) {
+    const title = normalizeText(track.title);
+    const artist = normalizeText(track.artist);
+    const album = normalizeText(track.album);
+    let score = 0;
+
+    if (title === normalizedQuery) score += 120;
+    else if (title.startsWith(normalizedQuery)) score += 95;
+    else if (title.includes(normalizedQuery)) score += 70;
+
+    if (artist === normalizedQuery) score += 80;
+    else if (artist.startsWith(normalizedQuery)) score += 55;
+    else if (artist.includes(normalizedQuery)) score += 35;
+
+    if (album.includes(normalizedQuery)) score += 12;
+    if (track.objectURL) score += 6;
+
+    if (track.source === 'deezer') score += 12;
+    else if (track.source === 'spotify') score += 8;
+    else if (track.source === 'jamendo') score += 4;
+
+    return score;
+}
+
+function sortTracksForQuery(tracks, query) {
+    const normalizedQuery = normalizeText(query);
+    if (!normalizedQuery) return tracks;
+
+    return [...tracks].sort((a, b) => scoreTrackForQuery(b, normalizedQuery) - scoreTrackForQuery(a, normalizedQuery));
+}
+
 // Fetchers modified to accept limits if possible, or we slice results
 // We'll trust the individual fetch functions or slice the results here.
 
@@ -278,13 +438,68 @@ export async function refreshDiscover() {
     }
 
     try {
-        // Fetch from all sources in parallel
-        // We limit to ~10-15 tracks per source to keep it snappy and not overwhelm the grid
+        const [deezerHealthy, spotifyHealthy] = await Promise.all([
+            checkDeezerStatus(),
+            checkSpotifyStatus()
+        ]);
+
+        let deezerPriorityTracks = [];
+        let spotifyPriorityTracks = [];
+
+        // Deezer is the main Discover feed.
+        if (deezerHealthy) {
+            const deezerResults = await Promise.allSettled([
+                fetchDeezerGenre('gospel', 6),
+                fetchDeezerGenre('hip hop', 6),
+                fetchDeezerTrending(12)
+            ]);
+
+            deezerResults.forEach(result => {
+                if (result.status === 'fulfilled') {
+                    deezerPriorityTracks = deezerPriorityTracks.concat(result.value);
+                }
+            });
+
+            deezerPriorityTracks = dedupeTracks(deezerPriorityTracks).slice(0, 12);
+            if (deezerPriorityTracks.length > 0) {
+                playerContext.discoverTracks = deezerPriorityTracks;
+                saveDiscoverTracks(deezerPriorityTracks);
+                renderDiscoverCards(deezerPriorityTracks);
+            }
+        }
+
+        // Spotify remains a secondary enrichment source.
+        if (!deezerPriorityTracks.length && spotifyHealthy) {
+            const spotifyResults = await Promise.allSettled([
+                fetchSpotifyGenre('gospel', 5),
+                fetchSpotifyGenre('hip-hop', 5),
+                fetchSpotifyTrending()
+            ]);
+
+            spotifyResults.forEach(result => {
+                if (result.status === 'fulfilled') {
+                    spotifyPriorityTracks = spotifyPriorityTracks.concat(result.value);
+                }
+            });
+
+            spotifyPriorityTracks = dedupeTracks(spotifyPriorityTracks).slice(0, 10);
+            if (spotifyPriorityTracks.length > 0) {
+                playerContext.discoverTracks = spotifyPriorityTracks;
+                saveDiscoverTracks(spotifyPriorityTracks);
+                renderDiscoverCards(spotifyPriorityTracks);
+            }
+        }
+
         const promises = [
-            fetchSpotifyGenre('gospel', 5),
-            fetchSpotifyGenre('hip-hop', 5),
-            fetchSpotifyTrending(),
-            fetchJamendoTracks().then(tracks => tracks.slice(0, 15)),
+            ...(deezerPriorityTracks.length ? [] : [
+                fetchDeezerTrending(15)
+            ]),
+            ...(spotifyPriorityTracks.length ? [] : [
+                fetchSpotifyGenre('gospel', 5),
+                fetchSpotifyGenre('hip-hop', 5),
+                fetchSpotifyTrending()
+            ]),
+            fetchJamendoTracks('', false, false).then(tracks => tracks.slice(0, 15)),
             fetchHearThisTracks().then(tracks => tracks.slice(0, 15)),
             fetchLastFMTracks().then(tracks => tracks.slice(0, 10)),
             fetchAudioDBTrending().then(tracks => tracks.slice(0, 10)),
@@ -293,32 +508,24 @@ export async function refreshDiscover() {
 
         const results = await Promise.allSettled(promises);
 
-        let allTracks = [];
+        let allTracks = [...spotifyPriorityTracks, ...deezerPriorityTracks];
         results.forEach(result => {
             if (result.status === 'fulfilled') {
                 allTracks = allTracks.concat(result.value);
             }
         });
 
-        // Deduplicate by title
-        const seenTitles = new Set();
-        const uniqueTracks = [];
-        for (const track of allTracks) {
-            const normalizedTitle = track.title.toLowerCase().trim();
-            if (!seenTitles.has(normalizedTitle)) {
-                seenTitles.add(normalizedTitle);
-                uniqueTracks.push(track);
-            }
-        }
+        const uniqueTracks = dedupeTracks(allTracks);
 
-        // Shuffle the combined unique list
-        const mixedTracks = shuffleArray(uniqueTracks);
+        // Keep Deezer first, then Spotify, then shuffle the rest.
+        const deezerFirst = uniqueTracks.filter(t => t.source === 'deezer');
+        const spotifySecond = uniqueTracks.filter(t => t.source === 'spotify');
+        const others = uniqueTracks.filter(t => t.source !== 'deezer' && t.source !== 'spotify');
 
-        // Ensure first 5-6 tracks are from Spotify Gospel/HipHop if available
-        let priorityTracks = uniqueTracks.filter(t => t.source === 'spotify').slice(0, 6);
-        let otherTracks = mixedTracks.filter(t => !priorityTracks.some(pt => pt.id === t.id));
+        const priorityTracks = [...deezerFirst, ...spotifySecond];
+        const otherTracks = shuffleArray(others);
 
-        const finalTracks = [...priorityTracks, ...otherTracks];
+        const finalTracks = sanitizeDiscoverTracks([...priorityTracks, ...otherTracks]);
 
         playerContext.discoverTracks = finalTracks;
         saveDiscoverTracks(finalTracks);
@@ -347,22 +554,17 @@ export async function renderDiscoverGrid(query = '', forceRefresh = false) {
 
     let tracks = [];
     if (query) {
-        const spotifyResults = await searchSpotify(query);
-        const jamendoResults = await fetchJamendoTracks(query);
+        const [deezerResults, spotifyResults, jamendoResults] = await Promise.all([
+            searchDeezer(query, 30),
+            searchSpotify(query),
+            fetchJamendoTracks(query, false, false)
+        ]);
 
-        // Prioritize Spotify results
-        const combined = [...spotifyResults, ...jamendoResults];
-
-        // Deduplicate
-        const seen = new Set();
-        tracks = combined.filter(t => {
-            const key = `${t.title}-${t.artist}`.toLowerCase();
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
+        // Deezer-first ranking with fuzzy relevance scoring.
+        const combined = [...deezerResults, ...spotifyResults, ...jamendoResults];
+        tracks = sanitizeDiscoverTracks(sortTracksForQuery(dedupeTracks(combined), query));
     } else {
-        // For Spotify-only testing, use refreshDiscover which CURATES from Spotify
+        // Full Discover refresh handles source curation and fallback.
         await refreshDiscover();
         return;
     }

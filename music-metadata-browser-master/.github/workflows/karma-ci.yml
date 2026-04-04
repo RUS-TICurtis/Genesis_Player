@@ -1,0 +1,42 @@
+name: Karma CI
+on:
+  push:
+
+jobs:
+
+  test:
+    name: Build & run Karma tests
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            browsers: 'Chrome'
+    runs-on: ${{ matrix.os }}
+    steps:
+
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Compile with Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14.x
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Build & Code analysis
+        run: yarn run lint
+
+      - name: Compile TypeScript
+        run: yarn run build
+
+      - name: Run XVFB headless test
+        uses: GabrielBB/xvfb-action@v1
+        with:
+          run: yarn run karma-headless --browsers ${{ matrix.browsers }}
+
+      - name: Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.github_token }}

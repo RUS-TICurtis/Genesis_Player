@@ -10,6 +10,7 @@ async function fetchMusicBrainzTrending(limit = 20) {
         query: 'status:official AND country:US', // Broad search
         limit: limit,
         offset: offset,
+        inc: 'cover-art-archive',
         fmt: 'json'
       },
       headers: {
@@ -19,9 +20,11 @@ async function fetchMusicBrainzTrending(limit = 20) {
 
     if (response.data && response.data.releases) {
       return response.data.releases.map(release => {
-        // Construct cover art URL (Cover Art Archive)
-        // https://coverartarchive.org/release/{release-id}/front
-        const coverURL = `https://coverartarchive.org/release/${release.id}/front`;
+        // Only use CAA when MusicBrainz indicates front art exists.
+        const hasFrontCover = release['cover-art-archive']?.front === true;
+        const coverURL = hasFrontCover
+          ? `https://coverartarchive.org/release/${release.id}/front-250`
+          : null;
 
         return {
           id: release.id,
