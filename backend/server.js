@@ -22,6 +22,7 @@ import { fetchJamendoTracks as searchJamendoForResolve } from './jamendo.js';
 
 const app = express();
 const PORT = process.env.PORT || 1552;
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 
 // Use CORS middleware to allow requests from your front-end
 app.use(cors());
@@ -263,6 +264,10 @@ app.get('/api/spotify/resolve', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Genesis server running at http://localhost:${PORT}`);
-});
+if (isDirectRun) {
+  app.listen(PORT, () => {
+    console.log(`Genesis server running at http://localhost:${PORT}`);
+  });
+}
+
+export default app;
