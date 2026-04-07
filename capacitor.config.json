@@ -13,6 +13,9 @@
     "StatusBar": {
       "style": "DARK",
       "backgroundColor": "#1a1a2e"
+    },
+    "CapacitorMusicControls": {
+      "notificationIcon": "ic_launcher"
     }
   },
   "android": {

@@ -2,6 +2,9 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
 
+include ':capacitor-community-media'
+project(':capacitor-community-media').projectDir = new File('../node_modules/@capacitor-community/media/android')
+
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../node_modules/@capacitor/app/android')
 
@@ -13,3 +16,6 @@ project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capa
 
 include ':capacitor-status-bar'
 project(':capacitor-status-bar').projectDir = new File('../node_modules/@capacitor/status-bar/android')
+
+include ':capacitor-music-controls-plugin'
+project(':capacitor-music-controls-plugin').projectDir = new File('../node_modules/capacitor-music-controls-plugin/android')
