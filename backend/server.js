@@ -16,7 +16,7 @@ import { fetchTrending as fetchAudioDBTrending } from './theaudiodb.js';
 import { fetchMusicBrainzTrending } from './musicbrainz.js';
 import { fetchGeniusLyrics } from './genius.js';
 import { fetchSpotifyTrending, searchSpotify, fetchSpotifyGenre, checkSpotifyIntegration } from './spotify.js';
-import { fetchDeezerTrending, searchDeezer, fetchDeezerGenre, checkDeezerIntegration } from './deezer.js';
+import { fetchDeezerTrending, searchDeezer, fetchDeezerGenre, checkDeezerIntegration, searchDeezerArtists, fetchRelatedDeezerArtists } from './deezer.js';
 import { fetchJamendoTracks as searchJamendoForResolve } from './jamendo.js';
 
 
@@ -176,6 +176,34 @@ app.get('/api/deezer/search', async (req, res) => {
   }
 });
 
+app.get('/api/deezer/artists/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: 'Query is required' });
+
+    const limit = Number.parseInt(req.query.limit, 10) || 12;
+    const artists = await searchDeezerArtists(q, limit);
+    res.json(artists);
+  } catch (error) {
+    console.error('Deezer artist search route error:', error.message);
+    res.json([]);
+  }
+});
+
+app.get('/api/deezer/artists/:artistId/related', async (req, res) => {
+  try {
+    const { artistId } = req.params;
+    if (!artistId) return res.status(400).json({ error: 'Artist ID is required' });
+
+    const limit = Number.parseInt(req.query.limit, 10) || 12;
+    const artists = await fetchRelatedDeezerArtists(artistId, limit);
+    res.json(artists);
+  } catch (error) {
+    console.error('Deezer related artists route error:', error.message);
+    res.json([]);
+  }
+});
+
 app.get('/api/deezer/genre', async (req, res) => {
   try {
     const { genre } = req.query;
@@ -229,29 +257,41 @@ app.get('/api/spotify/resolve', async (req, res) => {
 
     console.log(`Resolving stream for: ${title} - ${artist}`);
 
-    // Strategy 1: Jamendo Search
-    const jamendoData = await searchJamendoForResolve(`${title} ${artist}`, 'popularity_week');
-    if (jamendoData && jamendoData.results && jamendoData.results.length > 0) {
-      const track = jamendoData.results[0];
-      console.log(`Found Jamendo match: ${track.name}`);
-      return res.json({
-        url: track.audio,
-        source: 'jamendo',
-        matchType: 'audio'
-      });
-    }
+    const queries = [
+      `${title} ${artist}`,
+      `${artist} ${title}`,
+      title,
+      `${title.split('(')[0].trim()} ${artist}`.trim(),
+      `${title.split('-')[0].trim()} ${artist}`.trim()
+    ].filter(Boolean).filter((value, index, arr) => arr.indexOf(value) === index);
 
-    // Strategy 2: HearThis.at Search
-    console.log(`Searching HearThis.at for: ${title} ${artist}`);
-    const htResults = await searchHearThis(`${title} ${artist}`, 1, 5);
-    if (htResults && htResults.length > 0) {
-      const track = htResults[0];
-      console.log(`Found HearThis match: ${track.title}`);
-      return res.json({
-        url: track.stream_url,
-        source: 'hearthis',
-        matchType: 'audio'
-      });
+    for (const query of queries) {
+      // Strategy 1: Jamendo Search
+      const jamendoData = await searchJamendoForResolve(query, 'popularity_week');
+      if (jamendoData && jamendoData.results && jamendoData.results.length > 0) {
+        const track = jamendoData.results[0];
+        console.log(`Found Jamendo match for "${query}": ${track.name}`);
+        return res.json({
+          url: track.audio,
+          source: 'jamendo',
+          matchType: 'audio',
+          isPreview: false
+        });
+      }
+
+      // Strategy 2: HearThis.at Search
+      console.log(`Searching HearThis.at for: ${query}`);
+      const htResults = await searchHearThis(query, 1, 5);
+      if (htResults && htResults.length > 0) {
+        const track = htResults[0];
+        console.log(`Found HearThis match for "${query}": ${track.title}`);
+        return res.json({
+          url: track.stream_url,
+          source: 'hearthis',
+          matchType: 'audio',
+          isPreview: false
+        });
+      }
     }
 
     console.warn(`No stream found for: ${title} - ${artist}`);

@@ -1,4 +1,5 @@
 import { playerContext } from './state.js';
+import { createApiUrl } from './api-config.js';
 import { formatTime, truncate, getFallbackImage } from './utils.js';
 import { renderQueueTable } from './queue-manager.js';
 import { showMessage, elements, updateGlobalPlayingState } from './ui-manager.js';
@@ -6,7 +7,13 @@ import { fetchLyricsForTrack, renderLyrics, syncLyrics, resetLyricsState } from 
 
 const PLAYBACK_STATE_KEY = 'genesis_playback_state';
 const HISTORY_KEY = 'genesis_play_history';
+const DEFAULT_VOLUME_BOOST = 1;
 let isDragging = false;
+let audioContext = null;
+let mediaElementSource = null;
+let gainNode = null;
+let volumeBoost = DEFAULT_VOLUME_BOOST;
+let enhancerUnavailable = false;
 
 function notifyPlaybackStateChanged() {
     document.dispatchEvent(new CustomEvent('genesis-playback-state-changed'));
@@ -55,10 +62,97 @@ function getMuteBtn() { return document.getElementById('mute-btn'); }
 function getPlayIcon() { return document.getElementById('play-icon'); }
 function getShuffleBtn() { return document.getElementById('shuffle-btn'); }
 function getRepeatBtn() { return document.getElementById('repeat-btn'); }
+function getExtendedPlayIcon() { return document.querySelector('#extended-play-btn i'); }
+function getExtendedShuffleBtn() { return document.getElementById('extended-shuffle-btn'); }
+function getExtendedRepeatBtn() { return document.getElementById('extended-repeat-btn'); }
 function getSongTitle() { return document.getElementById('song-title'); }
 function getArtistName() { return document.getElementById('artist-name'); }
 function getAlbumArtImg() { return document.getElementById('album-art-img'); }
 function getAlbumArtPlaceholder() { return document.getElementById('album-art-placeholder'); }
+
+function getAllPlayIcons() {
+    return [
+        getPlayIcon(),
+        document.querySelector('#mobile-play-btn i'),
+        getExtendedPlayIcon()
+    ].filter(Boolean);
+}
+
+function getAllShuffleButtons() {
+    return [getShuffleBtn(), getExtendedShuffleBtn()].filter(Boolean);
+}
+
+function getAllRepeatButtons() {
+    return [getRepeatBtn(), getExtendedRepeatBtn()].filter(Boolean);
+}
+
+function canLoadTrackFromQueue(track) {
+    return Boolean(track?.objectURL || track?.previewURL || track?.source === 'deezer');
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function ensureAudioGraph() {
+    if (enhancerUnavailable) return null;
+
+    const audioPlayer = getAudioPlayer();
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!audioPlayer || !AudioContextCtor) return null;
+
+    try {
+        if (!audioContext) {
+            audioContext = new AudioContextCtor();
+        }
+
+        if (!gainNode) {
+            gainNode = audioContext.createGain();
+            gainNode.connect(audioContext.destination);
+        }
+
+        if (!mediaElementSource) {
+            mediaElementSource = audioContext.createMediaElementSource(audioPlayer);
+            mediaElementSource.connect(gainNode);
+        }
+    } catch (error) {
+        console.error('Audio enhancer unavailable, falling back to native volume:', error);
+        enhancerUnavailable = true;
+        audioContext = null;
+        mediaElementSource = null;
+        gainNode = null;
+        return null;
+    }
+
+    return { audioContext, gainNode };
+}
+
+function syncGainNode() {
+    if (!gainNode) return;
+    gainNode.gain.value = getAudioPlayer()?.muted ? 0 : volumeBoost;
+}
+
+export function getVolumeBoost() {
+    return volumeBoost;
+}
+
+export function setVolumeBoost(nextBoost = DEFAULT_VOLUME_BOOST) {
+    volumeBoost = clamp(Number(nextBoost) || DEFAULT_VOLUME_BOOST, 1, 2);
+    if (volumeBoost > 1) {
+        const graph = ensureAudioGraph();
+        if (!graph) return volumeBoost;
+        syncGainNode();
+    } else if (gainNode) {
+        syncGainNode();
+    }
+    return volumeBoost;
+}
+
+export function initializeAudioEnhancer() {
+    if (volumeBoost <= 1) return;
+    ensureAudioGraph();
+    syncGainNode();
+}
 
 export async function restorePlaybackState() {
     const savedState = localStorage.getItem(PLAYBACK_STATE_KEY);
@@ -74,7 +168,7 @@ export async function restorePlaybackState() {
     }
 
     try {
-        const { trackId, queueIds, currentTime, volume, isShuffled: savedShuffle, repeatState: savedRepeat } = JSON.parse(savedState);
+        const { trackId, queueIds, currentTime, volume, volumeBoost: savedVolumeBoost, muted, isShuffled: savedShuffle, repeatState: savedRepeat } = JSON.parse(savedState);
 
         // Restore Queue
         if (queueIds && queueIds.length > 0) {
@@ -98,6 +192,9 @@ export async function restorePlaybackState() {
             if (audioPlayer && track) {
                 audioPlayer.src = track.objectURL;
                 audioPlayer.volume = volume !== undefined ? volume : 1;
+                audioPlayer.muted = Boolean(muted);
+                volumeBoost = clamp(savedVolumeBoost !== undefined ? savedVolumeBoost : DEFAULT_VOLUME_BOOST, 1, 2);
+                syncGainNode();
 
                 const onMetadata = () => {
                     audioPlayer.currentTime = currentTime;
@@ -116,10 +213,9 @@ export async function restorePlaybackState() {
 
             updatePlaybackBar(track);
             // Ensure icons match state (usually paused on reload)
-            const playIcon = getPlayIcon();
-            const mobilePlayIcon = document.querySelector('#mobile-play-btn i');
-            if (playIcon) playIcon.className = 'fas fa-play';
-            if (mobilePlayIcon) mobilePlayIcon.className = 'fas fa-play';
+            getAllPlayIcons().forEach((icon) => {
+                icon.className = 'fas fa-play';
+            });
 
             renderQueueTable();
         } else if (playerContext.libraryTracks.length > 0) {
@@ -144,6 +240,8 @@ export function savePlaybackState() {
         queueIds: playerContext.trackQueue.map(t => t.id),
         currentTime: audioPlayer.currentTime,
         volume: audioPlayer.volume,
+        volumeBoost,
+        muted: audioPlayer.muted,
         isShuffled: playerContext.isShuffled,
         repeatState: playerContext.repeatState,
     };
@@ -240,26 +338,42 @@ export async function loadTrack(index, autoPlay = true) {
     const track = playerContext.trackQueue[index];
 
     if (track) {
-        // If it's a Spotify track or has no objectURL but is from a web source
-        if (!track.objectURL && (track.source === 'spotify' || track.source === 'deezer' || track.source === 'lastfm' || track.source === 'audiodb' || track.source === 'musicbrainz')) {
+        if (!track.objectURL && track.source === 'deezer') {
             try {
                 showMessage(`Resolving stream for "${track.title}"...`);
-                const resolveRes = await fetch(`/api/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
+                const resolveRes = await fetch(createApiUrl(`/api/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`));
                 const resolveData = await resolveRes.json();
                 if (resolveData.url) {
                     track.objectURL = resolveData.url;
-                    track.source = resolveData.source || track.source; // Keep track of actual source
+                    track.resolvedSource = resolveData.source || track.resolvedSource || 'deezer';
+                    track.streamMode = resolveData.isPreview ? 'preview' : 'full';
+                } else if (track.previewURL) {
+                    track.objectURL = track.previewURL;
+                    track.streamMode = 'preview';
+                    track.resolvedSource = 'deezer-preview';
+                    showMessage(`Full stream unavailable for "${track.title}". Playing preview clip instead.`);
                 } else {
-                    showMessage(`No stream found for "${track.title}". Reverting to library/other sources.`);
+                    showMessage(`No stream found for "${track.title}".`);
                     return;
                 }
             } catch (e) {
                 console.error("Resolve error", e);
-                showMessage("Stream resolution failed.");
-                return;
+                if (track.previewURL) {
+                    track.objectURL = track.previewURL;
+                    track.streamMode = 'preview';
+                    track.resolvedSource = 'deezer-preview';
+                    showMessage(`Stream resolution failed for "${track.title}". Playing preview clip instead.`);
+                } else {
+                    showMessage("Stream resolution failed.");
+                    return;
+                }
             }
+        } else if (!track.objectURL && ['spotify', 'lastfm', 'audiodb', 'musicbrainz', 'hearthis', 'jamendo'].includes(track.source)) {
+            showMessage(`Online playback is temporarily limited to Deezer tracks only.`);
+            return;
         }
         audioPlayer.src = track.objectURL;
+        audioPlayer.load();
     }
     updatePlaybackBar(track);
 
@@ -271,11 +385,26 @@ export async function loadTrack(index, autoPlay = true) {
     resetLyricsState();
 
     if (autoPlay) {
+        if (audioPlayer.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+            audioPlayer.currentTime = 0;
+            playTrack();
+            return;
+        }
+
         const canPlayHandler = () => {
             playTrack();
             audioPlayer.removeEventListener('canplay', canPlayHandler);
         };
+
+        const errorHandler = () => {
+            console.error('Audio element failed to load source:', audioPlayer.error);
+            showMessage(`Playback failed for "${track?.title || 'this track'}".`);
+            audioPlayer.removeEventListener('canplay', canPlayHandler);
+            audioPlayer.removeEventListener('error', errorHandler);
+        };
+
         audioPlayer.addEventListener('canplay', canPlayHandler);
+        audioPlayer.addEventListener('error', errorHandler, { once: true });
     } else {
         document.body.classList.remove('is-playing');
     }
@@ -291,17 +420,21 @@ export async function loadTrack(index, autoPlay = true) {
 
 export function playTrack() {
     const audioPlayer = getAudioPlayer();
-    const playIcon = getPlayIcon();
-    const mobilePlayIcon = document.querySelector('#mobile-play-btn i');
     if (!audioPlayer.src) return;
 
-    playerContext.isPlaying = true;
+    if (volumeBoost > 1) {
+        initializeAudioEnhancer();
+        audioContext?.resume?.().catch(() => null);
+    }
+
     audioPlayer.play().then(() => {
-        if (playIcon) playIcon.className = 'fas fa-pause';
-        if (mobilePlayIcon) mobilePlayIcon.className = 'fas fa-pause';
+        getAllPlayIcons().forEach((icon) => {
+            icon.className = 'fas fa-pause';
+        });
         document.querySelector('.playback-bar')?.classList.add('playing');
         document.body.classList.add('is-playing');
         updateGlobalPlayingState(playerContext.trackQueue[playerContext.currentTrackIndex]?.id);
+        playerContext.isPlaying = true;
         notifyPlaybackStateChanged();
     }).catch(e => {
         console.error("Playback failed:", e);
@@ -311,16 +444,19 @@ export function playTrack() {
 
 export function pauseTrack() {
     const audioPlayer = getAudioPlayer();
-    const playIcon = getPlayIcon();
-    const mobilePlayIcon = document.querySelector('#mobile-play-btn i');
     audioPlayer.pause();
-    playerContext.isPlaying = false;
-    if (playIcon) playIcon.className = 'fas fa-play';
-    if (mobilePlayIcon) mobilePlayIcon.className = 'fas fa-play';
+    getAllPlayIcons().forEach((icon) => {
+        icon.className = 'fas fa-play';
+    });
     document.querySelector('.playback-bar')?.classList.remove('playing');
     document.body.classList.remove('is-playing');
+    playerContext.isPlaying = false;
     updateGlobalPlayingState(playerContext.trackQueue[playerContext.currentTrackIndex]?.id);
     notifyPlaybackStateChanged();
+}
+
+export function syncEnhancedVolume() {
+    syncGainNode();
 }
 
 export function startPlayback(tracksOrIds, startIndex = 0, shuffle = false) {
@@ -403,7 +539,7 @@ export function nextTrack() {
         }
     }
 
-    if (playerContext.trackQueue[nextIndex]?.objectURL) {
+    if (canLoadTrackFromQueue(playerContext.trackQueue[nextIndex])) {
         loadTrack(nextIndex);
     }
 }
@@ -416,7 +552,7 @@ export function prevTrack() {
         return;
     }
     const prevIndex = (playerContext.currentTrackIndex - 1 + playerContext.trackQueue.length) % playerContext.trackQueue.length;
-    if (playerContext.trackQueue[prevIndex]?.objectURL) loadTrack(prevIndex);
+    if (canLoadTrackFromQueue(playerContext.trackQueue[prevIndex])) loadTrack(prevIndex);
 }
 
 export function toggleShuffle() {
@@ -427,11 +563,10 @@ export function toggleShuffle() {
 
 export function setShuffleState(shuffle) {
     playerContext.isShuffled = shuffle;
-    const shuffleBtn = getShuffleBtn();
-    if (shuffleBtn) {
+    getAllShuffleButtons().forEach((shuffleBtn) => {
         shuffleBtn.style.color = playerContext.isShuffled ? 'var(--primary-color)' : 'var(--text-color)';
         shuffleBtn.title = playerContext.isShuffled ? "Shuffle On" : "Shuffle Off";
-    }
+    });
     notifyPlaybackStateChanged();
 }
 
@@ -446,22 +581,32 @@ export function setRepeatState(state) {
 }
 
 export function updateRepeatButtonUI() {
-    const repeatBtn = getRepeatBtn();
-    if (!repeatBtn) return;
+    const repeatButtons = getAllRepeatButtons();
+    if (!repeatButtons.length) return;
 
-    repeatBtn.classList.remove('repeat-one');
-    repeatBtn.style.color = 'var(--text-color)';
+    repeatButtons.forEach((repeatBtn) => {
+        repeatBtn.classList.remove('repeat-one');
+        repeatBtn.style.color = 'var(--text-color)';
+    });
+
     let title = "Repeat Off";
 
     if (playerContext.repeatState === 1) {
-        repeatBtn.style.color = 'var(--primary-color)';
+        repeatButtons.forEach((repeatBtn) => {
+            repeatBtn.style.color = 'var(--primary-color)';
+        });
         title = "Repeat All";
     } else if (playerContext.repeatState === 2) {
-        repeatBtn.style.color = 'var(--primary-color)';
-        repeatBtn.classList.add('repeat-one');
+        repeatButtons.forEach((repeatBtn) => {
+            repeatBtn.style.color = 'var(--primary-color)';
+            repeatBtn.classList.add('repeat-one');
+        });
         title = "Repeat One";
     }
-    repeatBtn.title = title;
+
+    repeatButtons.forEach((repeatBtn) => {
+        repeatBtn.title = title;
+    });
     notifyPlaybackStateChanged();
 }
 

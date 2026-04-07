@@ -1,151 +1,55 @@
-# Genesis Player - Quick Start Guide
+# Genesis Player Quick Start
 
-## ✅ What's Been Set Up
+## Browser Development
 
-Your Genesis Player is now configured with **Capacitor** to run as a native Android/iOS mobile app! Here's what's ready:
-
-### 🎯 Completed Setup
-
-1. ✅ **Capacitor Installed** - Core, Android, iOS platforms
-2. ✅ **Plugins Added** - App, Filesystem, SplashScreen, StatusBar
-3. ✅ **Android Project Created** - Ready to build in Android Studio
-4. ✅ **API Configuration** - Smart routing for web/mobile environments
-5. ✅ **Mobile Optimizations** - Back button handling, app lifecycle management
-6. ✅ **Build Scripts** - npm commands for easy syncing
-
-### 📁 New Files Created
-
-- `capacitor.config.json` - Capacitor configuration
-- `public/js/config.js` - API endpoint configuration
-- `public/js/capacitor-init.js` - Mobile plugin initialization
-- `CAPACITOR_README.md` - Detailed documentation
-- `.gitignore` - Git ignore rules
-- `android/` - Native Android project folder
-
-## 🚀 Next Steps
-
-### Option 1: Test in Browser (Easiest)
+Run the local app and backend together:
 
 ```bash
-npm start
+npm install
+npm run dev
 ```
 
-Visit http://localhost:1552 - Everything works as before!
+Open `http://localhost:1552`.
 
-### Option 2: Build Android APK
+## Android Build
 
-#### Prerequisites
-- Install [Android Studio](https://developer.android.com/studio)
-- Install Java JDK 17 or higher
+The Android project already exists in `android/`, so you do not need to add it again.
 
-#### Steps
-
-1. **Open Android Studio**
-   ```bash
-   npm run cap:open:android
-   ```
-
-2. **Wait for Gradle Sync** (first time takes 5-10 minutes)
-
-3. **Run on Emulator or Device**
-   - Click the green "Run" button (▶️)
-   - Or press `Shift + F10`
-
-### Option 3: Build for Production
-
-Before building for production, you need to:
-
-1. **Deploy Your Backend**
-   - Deploy `backend/` folder to Vercel, Railway, or Heroku
-   - Get the production URL (e.g., `https://your-app.vercel.app`)
-
-2. **Update API Configuration**
-   
-   Edit `public/js/config.js`:
-   ```javascript
-   export const API_CONFIG = {
-       baseURL: '',
-       productionURL: 'https://your-backend-url.com', // ← Add your URL here
-       // ...
-   };
-   ```
-
-3. **Sync Changes**
-   ```bash
-   npm run cap:sync
-   ```
-
-4. **Build in Android Studio**
-   - Build → Generate Signed Bundle / APK
-   - Follow the wizard to create a keystore
-   - Choose "release" build variant
-
-## 📱 Features That Work on Mobile
-
-✅ **Local Music Playback** - Play audio files from device storage  
-✅ **Metadata Extraction** - Read ID3 tags from music files  
-✅ **Playlists** - Create and manage playlists (stored in IndexedDB)  
-✅ **Favorites** - Mark tracks as favorites  
-✅ **Queue Management** - Manage playback queue  
-✅ **Search** - Search your local library  
-✅ **Theme Toggle** - Light/dark mode  
-✅ **Back Button** - Native Android back button support  
-✅ **App Lifecycle** - Proper pause/resume handling  
-
-⚠️ **Requires Backend** (when deployed):
-- Discover Tab - Fetch music from Jamendo, LastFM, etc.
-- Lyrics - Fetch lyrics from Genius API
-- Genre Detection - Get genre info from LastFM
-
-## 🛠️ Useful Commands
+Use this flow:
 
 ```bash
-# Sync web changes to mobile
-npm run cap:sync
-
-# Open Android Studio
+npm install
+npm run cap:doctor
+npm run cap:sync:android
 npm run cap:open:android
-
-# Sync only Android
-npx cap sync android
-
-# Add iOS platform (macOS only)
-npx cap add ios
-
-# Open Xcode (macOS only)
-npx cap open ios
 ```
 
-## 🐛 Troubleshooting
+Then in Android Studio:
 
-### "Module not found" errors
+1. Wait for Gradle sync
+2. Pick an emulator or device
+3. Press Run
+
+## What Works Right Away
+
+- UI and navigation
+- bundled web assets
+- native Android packaging
+- local library features that do not depend on the Express API
+
+## What Still Needs Backend Access
+
+The frontend currently calls relative endpoints like `/api/...`, so Android builds will need a reachable backend for features such as online discovery, lyrics, and related API-driven data.
+
+If you want full mobile online features, the next step is adding a mobile API base URL and pointing it at a deployed backend.
+
+## Useful Commands
+
 ```bash
-npx cap sync android
+npm run dev
+npm run start
+npm run cap:copy:android
+npm run cap:sync:android
+npm run cap:open:android
+npm run cap:doctor
 ```
-
-### White screen on app launch
-1. Open Chrome and go to `chrome://inspect`
-2. Find your device and click "inspect"
-3. Check console for errors
-
-### Gradle build errors
-1. In Android Studio: File → Invalidate Caches / Restart
-2. Clean and rebuild
-
-### API calls not working in mobile app
-- Make sure you've set `productionURL` in `public/js/config.js`
-- Verify your backend is deployed and accessible
-
-## 📖 More Information
-
-See `CAPACITOR_README.md` for detailed documentation on:
-- Building for production
-- iOS setup
-- Plugin usage
-- Advanced configuration
-
-## 🎉 You're All Set!
-
-Your app is ready to run on Android! Just open Android Studio and hit run.
-
-**Need help?** Check the detailed README or the Capacitor docs at https://capacitorjs.com

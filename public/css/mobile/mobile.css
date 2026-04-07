@@ -79,6 +79,38 @@
         /* No border on mobile */
     }
 
+    .extended-info-panel .panel-content {
+        padding: 18px 18px 12px;
+    }
+
+    .extended-mobile-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--text-light);
+        background: var(--surface-color);
+        flex-shrink: 0;
+    }
+
+    .extended-mobile-controls .control-btn {
+        width: 48px;
+        height: 48px;
+    }
+
+    .extended-mobile-controls .control-btn.small {
+        width: 40px;
+        height: 40px;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .extended-mobile-controls .play-btn {
+        width: 60px;
+        height: 60px;
+    }
+
     /* When panel is active on mobile, it covers everything, so no margin shift needed */
     .main-content.panel-active {
         margin-right: 0;
@@ -88,18 +120,57 @@
         margin-top: 62px;
     }
 
+    .discover-header,
+    .playlists-header,
+    .library-header,
+    .artists-header,
+    .albums-header {
+        margin-top: 62px;
+        padding: 16px 15px 14px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .discover-title-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .discover-search-container {
+        width: 100%;
+        margin-left: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 10px;
+    }
+
+    .discover-search-container input {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .discover-title-row .btn-secondary,
+    .discover-search-container .btn-primary,
+    .discover-search-container .btn-secondary {
+        min-height: 42px;
+    }
+
     /* --- Mobile Playback Bar (Mini-Player) Overhaul --- */
     .playback-bar {
         height: 70px;
         padding: 0 12px;
         bottom: 56px;
+        left: 0;
+        width: 100%;
         z-index: 1000;
         display: flex;
         align-items: center;
         justify-content: space-between;
         background: var(--surface-color);
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
+        border-top: 1px solid var(--text-light);
+        box-shadow: none;
     }
 
     .playback-track-info {
@@ -156,7 +227,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        transform: rotate(-90deg);
+        transform: rotate(-90deg) scaleX(-1);
     }
 
     .circular-progress-bg {
@@ -278,9 +349,9 @@
         width: 100%;
         height: 56px;
         background: var(--surface-color);
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid var(--text-light);
         z-index: 1000;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        box-shadow: none;
     }
 
     .bottom-nav .nav-item {
@@ -310,7 +381,7 @@
     /* Adjust main content padding */
     .main-content {
         padding-bottom: 140px;
-        /* Space for playback bar + bottom nav */
+        /* Fixed playback rail + bottom nav */
         margin-left: 0 !important;
         width: 100% !important;
     }
@@ -324,5 +395,9 @@
         padding: 15px;
         gap: 12px;
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+    }
+
+    .discover-content {
+        align-items: start;
     }
 }

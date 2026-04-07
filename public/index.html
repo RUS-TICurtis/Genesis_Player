@@ -270,7 +270,10 @@
       <!-- 2. DISCOVER SECTION -->
       <div id="discover-section" class="main-section hidden">
         <div class="discover-header">
-          <h2>Discover</h2>
+          <div class="discover-title-row">
+            <h2>Discover</h2>
+            <button id="open-onboarding-btn" class="btn-secondary" type="button">Set up taste</button>
+          </div>
           <div class="discover-search-container">
             <input type="text" id="discover-search-input" placeholder="Search artists, albums, tracks...">
             <button id="discover-search-btn" class="btn-primary" title="Search online"><i
@@ -283,6 +286,61 @@
           <div class="empty-state">
             <i class="fas fa-compass" style="font-size: 48px; color: #ddd; margin-bottom: 10px;"></i>
             <p>Connect online to discover new music.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="taste-onboarding-section" class="main-section hidden taste-onboarding-page">
+        <div class="taste-onboarding-shell">
+          <div class="taste-fixed-top">
+            <div class="taste-onboarding-header">
+              <div>
+                <span class="taste-onboarding-kicker">Discovery setup</span>
+                <h3>Create your artist crew</h3>
+                <p>Pick at least 10 artists. We&apos;ll use them to shape Discover and your home suggestions for now with cached local data.</p>
+              </div>
+              <button id="taste-onboarding-later-btn" class="close-modal-btn" type="button" aria-label="Close onboarding">&times;</button>
+            </div>
+
+            <div class="taste-progress-row">
+              <div>
+                <strong><span id="taste-selected-count">0</span> / 10 selected</strong>
+                <p id="taste-progress-label">Pick 10 artists to unlock curation</p>
+              </div>
+              <button id="taste-reset-btn" class="btn-secondary" type="button">Start over</button>
+            </div>
+
+            <div class="taste-search-wrap">
+              <i class="fas fa-search"></i>
+              <input type="text" id="taste-search-input" placeholder="Search for artists you already love">
+            </div>
+            <div id="taste-search-dropdown" class="taste-search-dropdown hidden"></div>
+            <p id="taste-search-status" class="taste-search-status">Starter artists to kick off your recommendations</p>
+
+            <div id="taste-genre-chips" class="taste-chip-row"></div>
+          </div>
+
+          <div class="taste-scroll-region">
+            <div class="taste-selected-section">
+              <div class="taste-section-head">
+                <span>Your picks</span>
+                <small>Saved locally for now</small>
+              </div>
+              <div id="taste-selected-list" class="taste-selected-list"></div>
+            </div>
+
+            <section class="taste-panel taste-panel-wide">
+              <div class="taste-section-head">
+                <span>Starter artists</span>
+                <small>Pick from the grid. Similar artists appear inline after your selection.</small>
+              </div>
+              <div id="taste-starter-grid" class="taste-artist-grid"></div>
+            </section>
+          </div>
+
+          <div class="taste-footer">
+            <span id="taste-feedback"></span>
+            <button id="taste-save-btn" class="primary" type="button" disabled>Choose at least 10 artists</button>
           </div>
         </div>
       </div>
@@ -514,6 +572,13 @@
         </div>
       </div>
     </div>
+    <div class="extended-mobile-controls">
+      <button class="control-btn small" id="extended-shuffle-btn" title="Shuffle"><i class="fas fa-random"></i></button>
+      <button class="control-btn" id="extended-prev-btn" title="Previous"><i class="fas fa-step-backward"></i></button>
+      <button class="control-btn play-btn" id="extended-play-btn" title="Play/Pause"><i class="fas fa-play"></i></button>
+      <button class="control-btn" id="extended-next-btn" title="Next"><i class="fas fa-step-forward"></i></button>
+      <button class="control-btn small" id="extended-repeat-btn" title="Repeat"><i class="fas fa-redo"></i></button>
+    </div>
   </div>
 
   <!-- Bottom Navigation (Mobile Only) -->
@@ -525,7 +590,6 @@
     <div class="nav-item" data-target="playlists-section"><i class="fas fa-list"></i><span>Playlists</span></div>
   </div>
 
-  <!-- Modals -->
   <div id="url-modal" class="modal hidden">
     <div class="modal-content">
       <h3>Open URL</h3>
@@ -677,8 +741,18 @@
             id="volume-icon"></i></button>
         <div class="volume-control-popup" id="volume-popup">
           <button class="control-btn small" id="mute-btn" title="Mute"><i class="fas fa-volume-up"></i></button>
-          <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7" />
-          <span id="volume-percentage">70</span>
+          <div class="volume-slider-group">
+            <div class="volume-slider-row">
+              <span class="volume-slider-label">Volume</span>
+              <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7" />
+              <span id="volume-percentage">70</span>
+            </div>
+            <div class="volume-slider-row">
+              <span class="volume-slider-label">Boost</span>
+              <input type="range" id="volume-boost-slider" min="1" max="2" step="0.01" value="1" />
+              <span id="volume-boost-percentage">100</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -690,6 +764,7 @@
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 
   <script type="module" src="js/script.js"></script>
+  <script type="module" src="js/dev-live-reload-bootstrap.js"></script>
   <script>
 
   </script>

@@ -8,6 +8,7 @@ import * as QueueManager from './queue-manager.js';
 import * as AlbumManager from './album-manager.js';
 import * as ArtistManager from './artist-manager.js';
 import * as DiscoverManager from './discover-manager.js';
+import * as OnboardingManager from './onboarding-manager.js';
 import * as ProfileManager from './profile-manager.js';
 import * as ContextMenuManager from './context-menu-manager.js';
 import { refreshLyrics, openManualLyricsSearch } from './lyrics-manager.js';
@@ -23,8 +24,74 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     };
     const deferUserTask = (fn) => setTimeout(fn, 0);
+    let backendBootstrapStarted = false;
+    const DROP_IMPORT_SECTION_IDS = ['home-section', 'library-section', 'queue-view-section'];
 
     const getCurrentTrack = () => playerContext.trackQueue[playerContext.currentTrackIndex] || null;
+    const getDropImportSections = () => DROP_IMPORT_SECTION_IDS
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+    const getActiveDropSection = () => document.querySelector('#home-section:not(.hidden), #library-section:not(.hidden), #queue-view-section:not(.hidden)');
+    const clearDropTargets = () => {
+        getDropImportSections().forEach((section) => section.classList.remove('file-drop-active'));
+        document.body.classList.remove('dragover');
+    };
+    const isFileDragEvent = (event) => {
+        const dataTransfer = event?.dataTransfer;
+        if (!dataTransfer) return false;
+
+        const types = Array.from(dataTransfer.types || []).map((type) => String(type).toLowerCase());
+        if (types.includes('files')) return true;
+
+        const items = Array.from(dataTransfer.items || []);
+        if (items.some((item) => item.kind === 'file')) return true;
+
+        return Boolean(dataTransfer.files && dataTransfer.files.length > 0);
+    };
+    const getDroppedFiles = (event) => {
+        const dataTransfer = event?.dataTransfer;
+        if (!dataTransfer) return [];
+
+        if (dataTransfer.files && dataTransfer.files.length > 0) {
+            return Array.from(dataTransfer.files);
+        }
+
+        const items = Array.from(dataTransfer.items || []);
+        return items
+            .filter((item) => item.kind === 'file')
+            .map((item) => item.getAsFile())
+            .filter(Boolean);
+    };
+    const resolveDropTargetSection = (target) => {
+        const targetSection = target?.closest?.('#home-section, #library-section, #queue-view-section');
+        if (targetSection) return targetSection;
+
+        const activeSection = getActiveDropSection();
+        if (activeSection) return activeSection;
+
+        return document.getElementById('library-section');
+    };
+    const appendTracksToQueue = (tracks = []) => {
+        if (!tracks.length) return;
+
+        const shouldInitializeQueue = playerContext.trackQueue.length === 0;
+        playerContext.trackQueue.push(...tracks);
+        QueueManager.renderQueueTable();
+
+        if (shouldInitializeQueue && playerContext.currentTrackIndex === -1) {
+            PlaybackManager.loadTrack(0, false);
+        } else {
+            PlaybackManager.savePlaybackState();
+        }
+    };
+    const importFilesForSection = async (fileList, sectionId = 'library-section') => {
+        const newTracks = await LibraryManager.handleFiles(fileList);
+        if (!newTracks.length) return;
+
+        if (sectionId === 'queue-view-section') {
+            appendTracksToQueue(newTracks);
+        }
+    };
 
     const syncNativePlaybackControls = () => {
         const audio = document.getElementById('audio-player');
@@ -45,7 +112,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (!('mediaSession' in navigator)) return;
 
         try {
-            navigator.mediaSession.playbackState = playerContext.isPlaying ? 'playing' : 'paused';
+            // Synchronize the actual playback state with the OS
+            const isPlaying = !audio.paused && !audio.ended && audio.readyState > 2;
+            navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+            
+            playerContext.isPlaying = isPlaying;
 
             if (hasTrack) {
                 navigator.mediaSession.metadata = new MediaMetadata({
@@ -68,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
                 navigator.mediaSession.setPositionState({
                     duration: audio.duration,
-                    playbackRate: audio.playbackRate || 1,
+                    playbackRate: audio.playbackRate || 1.0,
                     position: audio.currentTime || 0
                 });
             }
@@ -117,6 +188,18 @@ document.addEventListener('DOMContentLoaded', async function () {
             safeSetAction('pause', () => PlaybackManager.pauseTrack());
             safeSetAction('previoustrack', () => PlaybackManager.prevTrack());
             safeSetAction('nexttrack', () => PlaybackManager.nextTrack());
+            
+            // Support seeking from the notification/lock screen progress bar
+            safeSetAction('seekto', (details) => {
+                const audio = document.getElementById('audio-player');
+                if (!audio || !Number.isFinite(details.seekTime)) return;
+                
+                audio.currentTime = details.seekTime;
+                // Update the UI and position state immediately after seek
+                syncNativePlaybackControls();
+                PlaybackManager.getTimeHandler()(); 
+            });
+
             safeSetAction('seekbackward', (details) => {
                 const audio = document.getElementById('audio-player');
                 if (!audio) return;
@@ -169,6 +252,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     );
 
     ProfileManager.initProfileListeners();
+    OnboardingManager.initOnboarding({
+        onComplete: () => {
+            LibraryManager.renderHomeGrid();
+            DiscoverManager.renderDiscoverGrid('', true);
+        }
+    });
 
     // Context Menu registers itself to be closed by UI interactions
     // In ContextMenuManager, we export setActiveContextMenu. 
@@ -188,6 +277,30 @@ document.addEventListener('DOMContentLoaded', async function () {
         await PlaybackManager.restorePlaybackState();
     };
 
+    const startDeferredBackendBootstrap = (mode = 'deferred') => {
+        if (backendBootstrapStarted) return;
+        backendBootstrapStarted = true;
+
+        const boot = () => DiscoverManager.renderDiscoverGrid('', true);
+
+        if (mode === 'immediate') {
+            deferUserTask(boot);
+            return;
+        }
+
+        const scheduleBoot = () => {
+            runWhenIdle(() => {
+                setTimeout(boot, 1200);
+            }, 2000);
+        };
+
+        if (document.readyState === 'complete') {
+            scheduleBoot();
+        } else {
+            window.addEventListener('load', scheduleBoot, { once: true });
+        }
+    };
+
     runAfterPaint(() => {
         runWhenIdle(() => {
             initLibraryAndPlayback();
@@ -204,8 +317,19 @@ document.addEventListener('DOMContentLoaded', async function () {
     const discoverSearchInput = document.getElementById('discover-search-input');
     const discoverSearchBtn = document.getElementById('discover-search-btn');
 
-    // Initial Discover Fetch (it handles storage check now)
-    runWhenIdle(() => DiscoverManager.renderDiscoverGrid());
+    // Restore cached discover content without touching the backend yet.
+    runWhenIdle(() => {
+        if (DiscoverManager.loadDiscoverFromStorage()) {
+            DiscoverManager.renderDiscoverCards(playerContext.discoverTracks);
+        }
+    });
+
+    // Let the UI finish rendering before we start backend-driven discover work.
+    startDeferredBackendBootstrap();
+
+    document.addEventListener('genesis:taste-profile-updated', () => {
+        LibraryManager.renderHomeGrid();
+    });
 
     // Restore Search
     UI.restoreSearch();
@@ -251,8 +375,12 @@ document.addEventListener('DOMContentLoaded', async function () {
                 if (sidebar) sidebar.classList.remove('active');
             }
             // Special handling for discover tab
-            if (target === 'discover-section' && playerContext.discoverTracks.length === 0) {
-                deferUserTask(() => DiscoverManager.renderDiscoverGrid());
+            if (target === 'discover-section') {
+                if (!backendBootstrapStarted) {
+                    startDeferredBackendBootstrap('immediate');
+                } else if (playerContext.discoverTracks.length === 0) {
+                    deferUserTask(() => DiscoverManager.renderDiscoverGrid());
+                }
             }
             // Special handling for favorites
             if (target === 'favorites-section') {
@@ -291,12 +419,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     const audioPlayer = document.getElementById('audio-player');
     if (audioPlayer) {
         audioPlayer.addEventListener('timeupdate', PlaybackManager.getTimeHandler());
-        audioPlayer.addEventListener('ended', PlaybackManager.nextTrack);
-        audioPlayer.addEventListener('play', syncNativePlaybackControls);
-        audioPlayer.addEventListener('pause', syncNativePlaybackControls);
+        audioPlayer.addEventListener('ended', () => PlaybackManager.nextTrack());
+        
+        // Vital for Audio Focus: When the system pauses the audio (e.g., incoming call), 
+        // the audio element emits 'pause'. We must sync our internal UI state.
+        audioPlayer.addEventListener('play', () => syncNativePlaybackControls());
+        audioPlayer.addEventListener('pause', () => syncNativePlaybackControls());
         audioPlayer.addEventListener('loadedmetadata', syncNativePlaybackControls);
-        audioPlayer.addEventListener('timeupdate', syncNativePlaybackControls);
-        audioPlayer.addEventListener('ended', syncNativePlaybackControls);
+        audioPlayer.addEventListener('ratechange', syncNativePlaybackControls);
     }
 
     initNativePlaybackControlHandlers();
@@ -307,11 +437,16 @@ document.addEventListener('DOMContentLoaded', async function () {
     const togglePlay = () => (playerContext.isPlaying ? PlaybackManager.pauseTrack() : PlaybackManager.playTrack());
     document.getElementById('play-btn')?.addEventListener('click', togglePlay);
     document.getElementById('mobile-play-btn')?.addEventListener('click', togglePlay);
+    document.getElementById('extended-play-btn')?.addEventListener('click', togglePlay);
 
     document.getElementById('next-btn')?.addEventListener('click', PlaybackManager.nextTrack);
     document.getElementById('prev-btn')?.addEventListener('click', PlaybackManager.prevTrack);
     document.getElementById('shuffle-btn')?.addEventListener('click', PlaybackManager.toggleShuffle);
     document.getElementById('repeat-btn')?.addEventListener('click', PlaybackManager.toggleRepeat);
+    document.getElementById('extended-next-btn')?.addEventListener('click', PlaybackManager.nextTrack);
+    document.getElementById('extended-prev-btn')?.addEventListener('click', PlaybackManager.prevTrack);
+    document.getElementById('extended-shuffle-btn')?.addEventListener('click', PlaybackManager.toggleShuffle);
+    document.getElementById('extended-repeat-btn')?.addEventListener('click', PlaybackManager.toggleRepeat);
 
     // Progress Bar Drag
     PlaybackManager.initProgressBarListeners();
@@ -320,13 +455,17 @@ document.addEventListener('DOMContentLoaded', async function () {
     const volumeBtn = document.getElementById('volume-btn');
     const volumePopup = document.getElementById('volume-popup');
     const volumeSlider = document.getElementById('volume-slider');
+    const volumeBoostSlider = document.getElementById('volume-boost-slider');
     const muteBtn = document.getElementById('mute-btn');
     const volumeIcon = document.getElementById('volume-icon');
     const muteBtnIcon = muteBtn?.querySelector('i');
     const updateVolumeUI = () => {
         const effectiveVolume = audioPlayer.muted ? 0 : audioPlayer.volume;
         const volumePercentage = document.getElementById('volume-percentage');
+        const volumeBoostPercentage = document.getElementById('volume-boost-percentage');
         if (volumePercentage) volumePercentage.textContent = Math.round(effectiveVolume * 100);
+        if (volumeBoostPercentage) volumeBoostPercentage.textContent = Math.round(PlaybackManager.getVolumeBoost() * 100);
+        if (volumeBoostSlider) volumeBoostSlider.value = PlaybackManager.getVolumeBoost();
 
         let iconClass = 'fas fa-volume-up';
         if (effectiveVolume === 0) iconClass = 'fas fa-volume-mute';
@@ -341,6 +480,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         volumeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (volumeSlider) volumeSlider.value = audioPlayer.volume;
+            if (volumeBoostSlider) volumeBoostSlider.value = PlaybackManager.getVolumeBoost();
             updateVolumeUI();
             volumePopup.classList.toggle('active');
         });
@@ -356,6 +496,18 @@ document.addEventListener('DOMContentLoaded', async function () {
             const val = parseFloat(e.target.value);
             audioPlayer.volume = val;
             audioPlayer.muted = false;
+            PlaybackManager.syncEnhancedVolume();
+            PlaybackManager.savePlaybackState();
+            updateVolumeUI();
+        });
+    }
+
+    if (volumeBoostSlider) {
+        volumeBoostSlider.addEventListener('input', (e) => {
+            const boost = parseFloat(e.target.value);
+            PlaybackManager.setVolumeBoost(boost);
+            audioPlayer.muted = false;
+            PlaybackManager.syncEnhancedVolume();
             PlaybackManager.savePlaybackState();
             updateVolumeUI();
         });
@@ -364,6 +516,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (muteBtn) {
         muteBtn.addEventListener('click', () => {
             audioPlayer.muted = !audioPlayer.muted;
+            PlaybackManager.syncEnhancedVolume();
             PlaybackManager.savePlaybackState();
             updateVolumeUI();
         });
@@ -466,18 +619,57 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     const fileInput = document.getElementById('file-input');
     const folderInput = document.getElementById('folder-input');
-    if (fileInput) fileInput.addEventListener('change', (e) => deferUserTask(() => LibraryManager.handleFiles(e.target.files)));
-    if (folderInput) folderInput.addEventListener('change', (e) => deferUserTask(() => LibraryManager.handleFiles(e.target.files)));
+    if (fileInput) fileInput.addEventListener('change', (e) => deferUserTask(async () => {
+        const activeSectionId = localStorage.getItem('genesis_active_section') || 'library-section';
+        await importFilesForSection(e.target.files, activeSectionId);
+        e.target.value = '';
+    }));
+    if (folderInput) folderInput.addEventListener('change', (e) => deferUserTask(async () => {
+        const activeSectionId = localStorage.getItem('genesis_active_section') || 'library-section';
+        await importFilesForSection(e.target.files, activeSectionId);
+        e.target.value = '';
+    }));
 
     document.getElementById('open-files-option')?.addEventListener('click', () => fileInput.click());
     document.getElementById('open-folder-option')?.addEventListener('click', () => folderInput.click());
+    document.getElementById('queue-add-files-btn')?.addEventListener('click', () => fileInput?.click());
 
     // Drag and Drop
-    document.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); document.body.classList.add('dragover'); });
-    document.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); document.body.classList.remove('dragover'); });
+    document.addEventListener('dragenter', (e) => {
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+        const targetSection = resolveDropTargetSection(e.target);
+        clearDropTargets();
+        document.body.classList.add('dragover');
+        targetSection?.classList.add('file-drop-active');
+    });
+    document.addEventListener('dragover', (e) => {
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        const targetSection = resolveDropTargetSection(e.target);
+        clearDropTargets();
+        document.body.classList.add('dragover');
+        targetSection?.classList.add('file-drop-active');
+    });
+    document.addEventListener('dragleave', (e) => {
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.relatedTarget) return;
+        clearDropTargets();
+    });
     document.addEventListener('drop', (e) => {
-        e.preventDefault(); e.stopPropagation(); document.body.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) deferUserTask(() => LibraryManager.handleFiles(e.dataTransfer.files));
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const targetSection = resolveDropTargetSection(e.target);
+        const droppedFiles = getDroppedFiles(e);
+        clearDropTargets();
+        if (droppedFiles.length > 0) {
+            deferUserTask(() => importFilesForSection(droppedFiles, targetSection?.id || 'library-section'));
+        }
     });
 
     // Modals
@@ -591,6 +783,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 audioPlayer.volume = Math.min(1.0, audioPlayer.volume + 0.1);
                 audioPlayer.muted = false;
                 if (volumeSlider) volumeSlider.value = audioPlayer.volume;
+                PlaybackManager.syncEnhancedVolume();
                 PlaybackManager.savePlaybackState();
                 updateVolumeUI();
                 break;
@@ -599,6 +792,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 audioPlayer.volume = Math.max(0.0, audioPlayer.volume - 0.1);
                 audioPlayer.muted = false;
                 if (volumeSlider) volumeSlider.value = audioPlayer.volume;
+                PlaybackManager.syncEnhancedVolume();
                 PlaybackManager.savePlaybackState();
                 updateVolumeUI();
                 break;
@@ -606,6 +800,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             case 'M':
                 event.preventDefault();
                 audioPlayer.muted = !audioPlayer.muted;
+                PlaybackManager.syncEnhancedVolume();
                 PlaybackManager.savePlaybackState();
                 updateVolumeUI();
                 break;
@@ -751,5 +946,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             ArtistManager.renderArtistsGrid();
         });
     };
+
+    window.addEventListener('blur', clearDropTargets);
 
 });

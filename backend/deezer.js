@@ -48,10 +48,24 @@ function mapDeezerTrack(track) {
         album: track.album?.title || 'Deezer',
         duration: track.duration || 0,
         coverURL: track.album?.cover_xl || track.album?.cover_big || track.album?.cover_medium || track.artist?.picture_medium || '',
-        objectURL: track.preview || null,
+        objectURL: null,
+        previewURL: track.preview || null,
+        requiresResolve: true,
         source: 'deezer',
         isURL: true,
         isFromDiscover: true
+    };
+}
+
+function mapDeezerArtist(artist) {
+    if (!artist || !artist.id) return null;
+
+    return {
+        id: String(artist.id),
+        name: artist.name || 'Unknown Artist',
+        picture: artist.picture_xl || artist.picture_big || artist.picture_medium || artist.picture || '',
+        tracklist: artist.tracklist || '',
+        source: 'deezer'
     };
 }
 
@@ -102,6 +116,30 @@ export async function fetchDeezerGenre(genre, limit = 10, index = 0) {
         return tracks;
     } catch (error) {
         console.error(`Error fetching Deezer genre ${genre}:`, error.response?.status, error.response?.data || error.message);
+        return [];
+    }
+}
+
+export async function searchDeezerArtists(query, limit = 12) {
+    try {
+        const data = await deezerGet('/search/artist', {
+            q: query,
+            limit
+        });
+
+        return (data?.data || []).map(mapDeezerArtist).filter(Boolean);
+    } catch (error) {
+        console.error('Error searching Deezer artists:', error.response?.status, error.response?.data || error.message);
+        return [];
+    }
+}
+
+export async function fetchRelatedDeezerArtists(artistId, limit = 12) {
+    try {
+        const data = await deezerGet(`/artist/${artistId}/related`);
+        return (data?.data || []).slice(0, limit).map(mapDeezerArtist).filter(Boolean);
+    } catch (error) {
+        console.error('Error fetching related Deezer artists:', error.response?.status, error.response?.data || error.message);
         return [];
     }
 }

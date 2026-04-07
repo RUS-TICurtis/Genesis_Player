@@ -12,8 +12,8 @@
     background-color: var(--light-color);
     min-height: 100vh;
     overflow-y: auto;
-    padding-bottom: 90px;
-    /* Add padding to avoid overlap with the new playback bar */
+    padding-bottom: 116px;
+    /* Reserve room for the fixed playback rail */
     position: relative;
     transition: margin-right 0.4s ease-in-out;
 }
@@ -158,8 +158,8 @@
 
 .selection-action-bar {
     position: fixed;
-    bottom: 100px;
-    /* Above playback bar */
+    bottom: 116px;
+    /* Above the fixed playback rail */
     left: 50%;
     transform: translateX(-50%);
     width: auto;
@@ -211,4 +211,35 @@
 
 .hidden {
     display: none !important;
+}
+
+#home-section.file-drop-active,
+#library-section.file-drop-active,
+#queue-view-section.file-drop-active {
+    position: relative;
+}
+
+#home-section.file-drop-active::after,
+#library-section.file-drop-active::after,
+#queue-view-section.file-drop-active::after {
+    content: 'Drop audio files to import';
+    position: absolute;
+    inset: 18px 18px 18px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--primary-color);
+    border-radius: 24px;
+    background: rgba(108, 92, 231, 0.08);
+    color: var(--primary-color);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    z-index: 20;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+}
+
+#queue-view-section.file-drop-active::after {
+    content: 'Drop audio files to import and add to queue';
 }

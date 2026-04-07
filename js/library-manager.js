@@ -1,5 +1,7 @@
 import db from './db.js';
 import { playerContext } from './state.js';
+import { createApiUrl } from './api-config.js';
+import { getTasteProfile } from './onboarding-manager.js';
 import { extractMetadata } from './metadata-extractor.js';
 import { showMessage, updateSelectionBar } from './ui-manager.js';
 import { formatTime, parseLRC, truncate, getFallbackImage } from './utils.js';
@@ -49,7 +51,7 @@ export async function loadLibraryFromDB() {
 }
 
 export async function handleFiles(fileList, options = {}) {
-    if (!fileList.length) return;
+    if (!fileList.length) return [];
 
     const openMenuBtn = document.getElementById('open-menu-btn');
     const openMenuText = document.getElementById('open-menu-text');
@@ -86,7 +88,7 @@ export async function handleFiles(fileList, options = {}) {
                     // Fetch genre from API if missing or generic
                     if (!metadata.genre || metadata.genre === 'Unknown Genre') {
                         try {
-                            const genreRes = await fetch(`/api/genre?title=${encodeURIComponent(metadata.title)}&artist=${encodeURIComponent(metadata.artist)}`);
+                            const genreRes = await fetch(createApiUrl(`/api/genre?title=${encodeURIComponent(metadata.title)}&artist=${encodeURIComponent(metadata.artist)}`));
                             if (genreRes.ok) {
                                 const genreData = await genreRes.json();
                                 if (genreData.genre && genreData.genre !== 'Unknown Genre') {
@@ -146,9 +148,12 @@ export async function handleFiles(fileList, options = {}) {
         } else {
             showMessage("No new valid audio files were added.");
         }
+
+        return newTracksForMemory;
     } catch (error) {
         console.error("Error handling files:", error);
         showMessage("An unexpected error occurred while adding files.");
+        return [];
     } finally {
         if (openMenuBtn) openMenuBtn.disabled = false;
         if (openMenuText) openMenuText.textContent = originalText;
@@ -184,13 +189,54 @@ export function renderHomeGrid() {
 function renderSuggestions() {
     const container = document.getElementById('home-suggestions-container');
     if (!container) return;
-    // Dynamic Suggestions based on Discovery
-    const suggestions = [
-        { type: 'trending', title: 'Trending Now', icon: 'fa-fire', color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
-        { type: 'pop', title: 'Pop Hits', icon: 'fa-music', color: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' },
-        { type: 'rock', title: 'Rock Classics', icon: 'fa-guitar', color: 'linear-gradient(135deg, #29323c 0%, #485563 100%)' },
-        { type: 'new', title: 'New Arrivals', icon: 'fa-clock', color: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)' }
-    ];
+    const profile = getTasteProfile();
+    const featuredArtist = profile?.selectedArtists?.[0]?.name;
+    const discoveryArtist = profile?.relatedArtists?.[0]?.name || profile?.selectedArtists?.[1]?.name;
+    const preferredGenre = profile?.selectedGenres?.[0];
+
+    const toTitleCase = (value = '') => value
+        .split(/[\s-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+
+    const suggestions = profile
+        ? [
+            {
+                type: featuredArtist ? `artist:${featuredArtist}` : 'trending',
+                title: featuredArtist ? `${featuredArtist} Radio` : 'Trending Now',
+                subtitle: featuredArtist ? 'Songs orbiting your first pick' : 'Global momentum, refreshed for you',
+                icon: 'fa-bolt',
+                color: 'linear-gradient(135deg, #ff8a5b 0%, #ff5f6d 100%)'
+            },
+            {
+                type: discoveryArtist ? `artist:${discoveryArtist}` : 'new',
+                title: discoveryArtist ? `Sounds like ${truncate(discoveryArtist, 18)}` : 'New Arrivals',
+                subtitle: discoveryArtist ? 'Related artists discovered from your taste setup' : 'Fresh music worth checking first',
+                icon: 'fa-satellite-dish',
+                color: 'linear-gradient(135deg, #1f4037 0%, #99f2c8 100%)'
+            },
+            {
+                type: preferredGenre ? `genre:${preferredGenre}` : 'pop',
+                title: preferredGenre ? `${toTitleCase(preferredGenre)} Picks` : 'Pop Hits',
+                subtitle: preferredGenre ? 'A lane built from your preferred genres' : 'Fast, bright, and familiar hooks',
+                icon: 'fa-wave-square',
+                color: 'linear-gradient(135deg, #4568dc 0%, #b06ab3 100%)'
+            },
+            {
+                type: 'new',
+                title: 'New Arrivals',
+                subtitle: profile?.selectedArtists?.length ? 'Fresh cuts blended with your curation profile' : 'New music handpicked across sources',
+                icon: 'fa-clock',
+                color: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)'
+            }
+        ]
+        : [
+            { type: 'trending', title: 'Trending Now', subtitle: 'Global momentum, refreshed for you', icon: 'fa-fire', color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
+            { type: 'pop', title: 'Pop Hits', subtitle: 'Bright, fast, and replay-ready', icon: 'fa-music', color: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' },
+            { type: 'rock', title: 'Rock Classics', subtitle: 'Guitars up front, energy all the way through', icon: 'fa-guitar', color: 'linear-gradient(135deg, #29323c 0%, #485563 100%)' },
+            { type: 'new', title: 'New Arrivals', subtitle: 'Fresh finds pulled into one lane', icon: 'fa-clock', color: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)' }
+        ];
 
     container.innerHTML = suggestions.map(s => `
         <div class="suggestion-card" data-mix-type="${s.type}">
@@ -199,6 +245,7 @@ function renderSuggestions() {
             </div>
             <div class="suggestion-card-overlay">
                 <span class="suggestion-card-title">${s.title}</span>
+                <span class="suggestion-card-subtitle">${s.subtitle}</span>
             </div>
         </div>
     `).join('');
@@ -724,4 +771,3 @@ export function openSectionModal(type) {
         }
     });
 }
-

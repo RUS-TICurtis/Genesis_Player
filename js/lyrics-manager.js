@@ -1,4 +1,5 @@
 import { playerContext } from './state.js';
+import { createApiUrl } from './api-config.js';
 import { showInputModal } from './ui-manager.js';
 
 export async function fetchLyricsForTrack(track, skipIds = [], manualMetadata = null) {
@@ -19,7 +20,7 @@ export async function fetchLyricsForTrack(track, skipIds = [], manualMetadata = 
         const album = manualMetadata ? manualMetadata.album : track.album;
         const year = manualMetadata ? manualMetadata.year : track.year;
 
-        let url = `/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album || '')}&year=${encodeURIComponent(year || '')}&lang=${langCode}`;
+        let url = createApiUrl(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album || '')}&year=${encodeURIComponent(year || '')}&lang=${langCode}`);
 
         if (track.skippedLyricsIds.length > 0) {
             track.skippedLyricsIds.forEach(id => {

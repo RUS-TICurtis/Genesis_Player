@@ -1,10 +1,18 @@
 {
-  "name": "music-player",
+  "name": "Genesis-player",
   "version": "1.0.0",
   "description": "",
   "main": "script.js",
   "scripts": {
+    "build": "xcopy js public\\js /E /I /Y && xcopy backend public\\backend /E /I /Y",
+    "dev": "node --watch --watch-path=backend --watch-path=js --watch-path=public backend/dev-server.js",
     "start": "node backend/dev-server.js",
+    "cap:copy": "npm run build && npx cap copy",
+    "cap:copy:android": "npm run build && npx cap copy android",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:sync:android": "npm run build && npx cap sync android",
+    "cap:open:android": "npx cap open android",
+    "cap:doctor": "npx cap doctor",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
@@ -15,10 +23,20 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/filesystem": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
     "dexie": "^4.2.1",
     "dotenv": "^17.2.3",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/ios": "^8.0.0"
   }
 }

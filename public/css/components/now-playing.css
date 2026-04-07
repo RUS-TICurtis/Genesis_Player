@@ -153,3 +153,7 @@
     transform: scale(1.05);
     opacity: 1;
 }
+
+.extended-mobile-controls {
+    display: none;
+}
